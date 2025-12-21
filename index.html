@@ -1,0 +1,140 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Department Head: Tenure Track</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+	<div id="app-container">
+
+		<div id="main-menu">
+			<h1 class="title">TENURE TRACK</h1>
+			<p class="subtitle">Publish or Perish</p>
+
+			<div class="menu-list">
+				<button class="btn-main" onclick="Game.showSetup()">New Game</button>
+
+				<input type="file" id="load-file-input" style="display:none" onchange="State.loadGame(this)">
+				<button class="btn-main" onclick="document.getElementById('load-file-input').click()">Load Game</button>
+
+				<button class="btn-main" onclick="alert('Settings feature pending')">Settings</button>
+				<button class="btn-main" onclick="alert('Credits: You')">Credits</button>
+			</div>
+		</div>
+
+		<div id="setup-screen" class="hidden">
+			<div class="paper-form">
+				<h2>Institution Charter</h2>
+				<p>Define the parameters of your new department.</p>
+
+				<div class="form-group">
+					<label>Academic Discipline:</label>
+					<select id="setup-discipline" onchange="Game.updateSetupFlavor()">
+						<option value="chemistry">Chemistry</option>
+						<option value="english" disabled>English (Coming Soon)</option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label>Institution Tier:</label>
+					<select id="setup-type" onchange="Game.updateSetupFlavor()">
+						<option value="community">Community College (Hard)</option>
+						<option value="state" selected>State University (Normal)</option>
+						<option value="ivy">Private Ivy (Political)</option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label>Department Name:</label>
+					<input type="text" id="setup-name" value="Dept. of Chemistry">
+				</div>
+
+				<div id="setup-desc" style="margin-bottom: 20px; font-style:italic; color:#666; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 10px;">
+					Balanced budget and expectations. Standard experience.
+				</div>
+
+				<div class="form-actions">
+					<button class="btn-main" onclick="Game.initGameFromSetup()">Sign Charter</button>
+					<button class="btn-small" onclick="location.reload()">Cancel</button>
+				</div>
+			</div>
+		</div>
+
+		<div id="game-interface" class="hidden">
+
+			<nav id="sidebar">
+				<div class="dept-brand">Dept. of Philosophy</div>
+
+				<div class="nav-group">
+					<div class="nav-item active" id="nav-office" onclick="Game.navigate('office')">
+						<span>Dean's Office</span>
+					</div>
+					<div class="nav-item" id="nav-calendar" onclick="Game.navigate('calendar')">
+						<span>Calendar</span>
+					</div>
+					<div class="nav-item" id="nav-faculty" onclick="Game.navigate('faculty')">
+						<span>Faculty Roster</span>
+					</div>
+					<div class="nav-item" id="nav-finance" onclick="Game.navigate('finance')">
+						<span>Budget & Grants</span>
+					</div>
+				</div>
+
+				<div class="sidebar-footer">
+					<button class="btn-small" onclick="State.saveGame()">Save</button>
+					<button class="btn-small" onclick="location.reload()">Exit</button>
+				</div>
+			</nav>
+
+			<main id="content-area">
+
+				<header id="top-bar">
+					<div class="time-controls">
+						<div class="btn-group">
+							<button id="btn-speed-0" class="btn-time active" onclick="Game.setSpeed(0)">⏸</button>
+							<button id="btn-speed-1" class="btn-time" onclick="Game.setSpeed(1)">▶</button>
+							<button id="btn-speed-2" class="btn-time" onclick="Game.setSpeed(2)">▶▶</button>
+							<button id="btn-speed-3" class="btn-time" onclick="Game.setSpeed(3)">▶▶▶</button>
+						</div>
+						<div id="date-display">Aug 1, 2025</div>
+					</div>
+
+					<div class="stats-row">
+						<div class="stat">Budget: <span id="stat-budget">$0</span></div>
+						<div class="stat">Prestige: <span id="stat-prestige">0</span></div>
+					</div>
+				</header>	
+
+				<div id="viewport">
+
+					<div id="screen-office" class="screen"></div>
+
+					<div id="screen-calendar" class="screen hidden">
+						<h2>Academic Calendar</h2>
+						<div class="panel"><p>Calendar visualization pending.</p></div>
+					</div>
+
+					<div id="screen-faculty" class="screen hidden">
+						<h2>Faculty Roster</h2>
+						<div class="panel"><p>No faculty hired yet.</p></div>
+					</div>
+
+					<div id="screen-finance" class="screen hidden">
+						<h2>Department Finances</h2>
+						<div class="panel"><p>Financial charts pending.</p></div>
+					</div>
+
+				</div>
+			</main>
+		</div>
+	</div>
+
+	<script src="js/data.js"></script>
+	<script src="js/state.js"></script>
+	<script src="js/ui.js"></script>
+	<script src="js/main.js"></script>
+</body>
+</html>
