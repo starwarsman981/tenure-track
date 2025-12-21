@@ -5,7 +5,9 @@ const Game = {
     SPEEDS: { 0: null, 1: 2000, 2: 1000, 3: 250 },
     viewState: { mode: 'month', year: 2025, month: 7, day: 1 },
     rosterFilters: { rank: 'all', field: 'all', tenure: 'all', sort: 'hIndex' },
-    financeTab: 'overview', // Default sub-tab
+    // --- NEW: ADMISSIONS FILTER ---
+    admissionsFilter: 'all', 
+    financeTab: 'overview',
 
     showSetup: function() {
         document.getElementById('main-menu').classList.add('hidden');
@@ -14,17 +16,13 @@ const Game = {
     },
 
     updateSetupFlavor: function() {
-        const typeKey = document.getElementById('setup-type').value;
-        const discKey = document.getElementById('setup-discipline').value;
-        const descBox = document.getElementById('setup-desc');
-        const institution = INSTITUTION_TYPES[typeKey];
-        const discipline = DISCIPLINES[discKey];
-        if (institution && discipline) {
-            descBox.innerHTML = `
-                <div style="margin-bottom: 5px;"><strong>${institution.label}:</strong> ${institution.desc}</div>
-                <div style="color: #666; font-style: italic;">${discipline.flavor}</div>
-            `;
-        }
+        const type = document.getElementById('setup-type').value;
+        const descDiv = document.getElementById('setup-desc');
+        let text = "";
+        if(type === 'state') text = "High teaching load, moderate funding, lots of bureaucracy.";
+        else if(type === 'ivy') text = "Massive endowment, high research expectations, cutthroat politics.";
+        else if(type === 'community') text = "Focus on education, low research budget, heavy course load.";
+        descDiv.innerText = text;
     },
 
     initGameFromSetup: function() {
@@ -45,53 +43,99 @@ const Game = {
         }
     },
 
-    launchLoadedGame: function() {
-        document.getElementById('main-menu').classList.add('hidden');
-        document.getElementById('setup-screen').classList.add('hidden');
-        this.viewState.year = State.data.year;
-        this.viewState.month = State.data.month;
-        this.viewState.day = State.data.day;
-        this.enterGameInterface();
-    },
-
     enterGameInterface: function() {
         UI.toggleGameView(true);
-        document.querySelector('.dept-brand').innerText = State.data.schoolName;
         UI.updateTopBar(State.data);
-        UI.renderInbox(State.data.emails || []); 
         this.navigate('office');
-        this.setSpeed(0);
-    },
-    
-    setSpeed: function(speedIndex) {
-        this.currentSpeed = speedIndex;
-        UI.updateSpeedButtons(speedIndex);
-        if (this.timer) clearInterval(this.timer);
-        if (speedIndex > 0) {
-            const ms = this.SPEEDS[speedIndex];
-            this.timer = setInterval(() => this.tick(), ms);
-        }
+        this.setSpeed(0); 
     },
 
     tick: function() {
+        if(State.data.pendingEvent) {
+            this.setSpeed(0); 
+            UI.showEventModal(State.data.pendingEvent);
+            return; 
+        }
+        const oldMonth = State.data.month;
         State.advanceDay();
         UI.updateTopBar(State.data);
+        
+        if (State.data.month !== oldMonth) {
+            this.viewState.month = State.data.month;
+            this.viewState.year = State.data.year;
+            this.viewState.day = 1;
+        }
+
+        if(State.data.pendingEvent) {
+            this.setSpeed(0); 
+            UI.showEventModal(State.data.pendingEvent);
+            return;
+        }
+
+        // Render Active Screen
         const calScreen = document.getElementById('screen-calendar');
-        if (!calScreen.classList.contains('hidden')) {
-            UI.renderCalendar(State.data, this.viewState);
-        }
-        if (!document.getElementById('screen-finance').classList.contains('hidden')) {
-             UI.renderFinance(State.data, this.financeTab);
-        }
+        if (!calScreen.classList.contains('hidden')) UI.renderCalendar(State.data, this.viewState);
+        if (!document.getElementById('screen-finance').classList.contains('hidden')) UI.renderFinance(State.data, this.financeTab);
+        if (!document.getElementById('screen-admissions').classList.contains('hidden')) UI.renderAdmissions(State.data);
     },
     
+    resolveEvent: function(choiceIdx) {
+        if (!State.data.pendingEvent) return;
+        const choice = State.data.pendingEvent.choices[choiceIdx];
+        if (State.data.budget < choice.cost) { alert("Insufficient funds."); return; }
+        State.resolveEventChoice(State.data.pendingEvent, choice);
+        const overlay = document.querySelector('.dossier-overlay');
+        if(overlay) overlay.remove();
+        UI.updateTopBar(State.data); 
+    },
+
+    runInterview: function(appId, qId) {
+        const result = State.performInterview(parseInt(appId), qId);
+        if(result) UI.renderAdmissions(State.data);
+    },
+
+    offer: function(appId) {
+        State.extendOffer(parseInt(appId));
+        UI.renderAdmissions(State.data);
+    },
+
+    reject: function(appId) {
+        State.rejectCandidate(parseInt(appId));
+        UI.renderAdmissions(State.data);
+    },
+
+    flyout: function(appId) {
+        if (State.data.budget < 500) { alert("Insufficient funds for flyout."); return; }
+        State.flyoutCandidate(parseInt(appId));
+        UI.updateTopBar(State.data);
+        UI.renderAdmissions(State.data);
+    },
+
+    // --- NEW: BULK VISIT WEEKEND ---
+    triggerVisitWeekend: function() {
+        const cost = State.calculateVisitWeekendCost();
+        if(State.data.budget < cost) { alert(`Insufficient funds. Cost: $${cost.toLocaleString()}`); return; }
+        if(confirm(`Host Visit Weekend for all pending candidates? Cost: $${cost.toLocaleString()}`)) {
+            State.hostVisitWeekend();
+            UI.updateTopBar(State.data);
+            UI.renderAdmissions(State.data);
+        }
+    },
+
+    // --- NEW: ADMISSIONS FILTER ---
+    setAdmissionsFilter: function(field) {
+        this.admissionsFilter = field;
+        UI.renderAdmissions(State.data);
+    },
+
     navigate: function(screenId) {
         UI.showScreen(screenId);
         if(screenId === 'calendar') UI.renderCalendar(State.data, this.viewState);
         if(screenId === 'faculty') UI.renderFaculty(State.data.faculty, this.rosterFilters);
         if(screenId === 'finance') UI.renderFinance(State.data, this.financeTab);
+        if(screenId === 'admissions') UI.renderAdmissions(State.data);
     },
-    
+
     setCalendarMode: function(mode) {
         this.viewState.mode = mode;
         UI.renderCalendar(State.data, this.viewState);
@@ -101,13 +145,11 @@ const Game = {
         const v = this.viewState;
         if (v.mode === 'year') {
             v.year += direction;
-        } 
-        else if (v.mode === 'month') {
+        } else if (v.mode === 'month') {
             v.month += direction;
             if(v.month > 11) { v.month = 0; v.year++; }
             if(v.month < 0) { v.month = 11; v.year--; }
-        } 
-        else if (v.mode === 'week') {
+        } else if (v.mode === 'week') {
             v.day += (direction * 7);
             if (v.day > 30) { v.day = 1; v.month++; }
             if (v.day < 1) { v.day = 25; v.month--; }
@@ -135,6 +177,16 @@ const Game = {
     setFinanceTab: function(tab) {
         this.financeTab = tab;
         UI.renderFinance(State.data, this.financeTab);
+    },
+
+    setSpeed: function(speedIndex) {
+        this.currentSpeed = speedIndex;
+        UI.updateSpeedButtons(speedIndex);
+        if (this.timer) clearInterval(this.timer);
+        if (speedIndex > 0) {
+            const ms = this.SPEEDS[speedIndex];
+            this.timer = setInterval(() => this.tick(), ms);
+        }
     }
 };
 
