@@ -8,7 +8,7 @@ const State = {
         faculty: [], students: [], emails: [],
         
         finance: {
-            undergradCount: 200,
+            undergradCount: 350, // Boosted enrollment for tuition revenue
             weeklyLog: [], 
             history: [], 
             lastWeekSummary: { income: 0, expenses: 0, net: 0, details: {} }
@@ -98,30 +98,20 @@ const FinanceSystem = {
         
         data.faculty.forEach(prof => {
             const weeklyBurn = Math.round(prof.burnRate / 4);
-            
-            // Deduct from Faculty Funds
             if (prof.funds >= weeklyBurn) {
                 prof.funds -= weeklyBurn;
-                
-                // If they have grants, deduct from the specific grant
-                // Simplification: Burn from the first grant in the list until empty
                 if (prof.grants.length > 0) {
-                    totalGrantBurn += weeklyBurn; // Dept gets overhead from this
+                    totalGrantBurn += weeklyBurn; 
                     prof.grants[0].remaining -= weeklyBurn;
-                    
-                    // Did the grant run out?
                     if(prof.grants[0].remaining <= 0) {
-                        prof.grants.shift(); // Remove expired grant
-                        // Recalculate funding label
+                        prof.grants.shift();
                         if(prof.grants.length === 0) prof.fundingSourceLabel = "Dept. Reserves";
                         else if(prof.grants.length === 1) prof.fundingSourceLabel = prof.grants[0].name;
                     }
                 }
             } else {
-                prof.funds = 0; // Broke
+                prof.funds = 0; 
             }
-            
-            // Recalculate Runway
             prof.runway = prof.burnRate > 0 ? (prof.funds / prof.burnRate).toFixed(1) : "Inf";
         });
 
@@ -173,7 +163,6 @@ const FinanceSystem = {
     getProjection: function(data) {
         const projection = [];
         let simBalance = data.budget;
-        // Deep copy grants info so we can simulate burn without hurting real data
         let simFaculty = JSON.parse(JSON.stringify(data.faculty.map(f => ({
             burnRate: f.burnRate,
             funds: f.funds,
@@ -190,7 +179,6 @@ const FinanceSystem = {
                 if (p.funds >= burn) {
                     p.funds -= burn;
                     if(p.grants.length > 0) { 
-                        // Simulate Decay
                         p.grants[0].remaining -= burn;
                         if(p.grants[0].remaining <= 0) p.grants.shift();
                         simIDC += Math.round(burn * FINANCE.IDC_RATE); 
@@ -205,18 +193,12 @@ const FinanceSystem = {
         return projection;
     },
     
-    // NEW: Get Fiscal Year End Estimate
     getFiscalStatus: function(data) {
         const last = data.finance.lastWeekSummary;
         if(!last) return { net: 0, status: "Unknown" };
-        
-        // Annualize current weekly net
         const weeklyNetAnnualized = last.net * 52;
-        // Add Tuition (2 semesters)
         const tuitionAnnual = data.finance.undergradCount * FINANCE.TUITION_PER_STUDENT * 2;
-        
         const projectedAnnualNet = weeklyNetAnnualized + tuitionAnnual;
-        
         return {
             net: projectedAnnualNet,
             status: projectedAnnualNet >= 0 ? "Surplus" : "Deficit"

@@ -1,7 +1,7 @@
 /* js/data.js */
 
 const CONSTANTS = {
-    STARTING_BUDGET: 250000, 
+    STARTING_BUDGET: 350000, // Boosted starting cash buffer
     STARTING_PRESTIGE: 10,
     MONTHS: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     DAYS_IN_MONTH: [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
@@ -10,15 +10,19 @@ const CONSTANTS = {
 
 const SCREEN_IDS = ['office', 'calendar', 'faculty', 'finance'];
 
-// ECONOMIC CONSTANTS
+// ECONOMIC CONSTANTS (REBALANCED)
 const FINANCE = {
-    WEEKLY_BLOCK_GRANT: 5000,    // Boosted from 3000
-    TUITION_PER_STUDENT: 1500,   
-    IDC_RATE: 0.20,              
-    TA_COST: 800,                
+    // 1. INCOME
+    WEEKLY_BLOCK_GRANT: 12000,   // Was 5,000. Now covers ~80% of payroll.
+    TUITION_PER_STUDENT: 2000,   // Was 1,500. Better revenue share.
+    IDC_RATE: 0.25,              // Was 0.20. You keep more overhead.
+    
+    // 2. EXPENSES
+    TA_COST: 600,                // Was 800. ($31k/yr stipend is more realistic)
     FACULTY_SALARY_DIVISOR: 52,  
-    LAB_UPKEEP_BASE: 500,
-    // Graph Colors
+    LAB_UPKEEP_BASE: 200,        // Was 500. Base cost to keep lights on is lower.
+    
+    // 3. VISUALS
     COLORS: {
         income: "#27ae60",
         expense: "#c0392b",
@@ -29,9 +33,9 @@ const FINANCE = {
 };
 
 const INSTITUTION_TYPES = {
-    "community": { label: "Community College", desc: "Tight budget. Survival mode.", budget: 50000, prestige: 5, facultyCount: [5, 8] },
-    "state": { label: "State University", desc: "Standard experience.", budget: 250000, prestige: 25, facultyCount: [8, 15] },
-    "ivy": { label: "Private Ivy", desc: "Massive budget, huge egos.", budget: 1000000, prestige: 80, facultyCount: [12, 20] }
+    "community": { label: "Community College", desc: "Tight budget. Survival mode.", budget: 75000, prestige: 5, facultyCount: [5, 8] },
+    "state": { label: "State University", desc: "Standard experience.", budget: 350000, prestige: 25, facultyCount: [8, 12] },
+    "ivy": { label: "Private Ivy", desc: "Massive budget, huge egos.", budget: 1500000, prestige: 80, facultyCount: [12, 18] }
 };
 
 const DISCIPLINES = {
@@ -54,8 +58,8 @@ const FAC_DATA = {
     ranks: [
         { id: "adjunct", label: "Adjunct Lecturer", tenure: false, baseH: 2, baseSal: 24000, ageMin: 26, ageMax: 65 },
         { id: "assistant", label: "Assistant Professor", tenure: false, baseH: 8, baseSal: 85000, ageMin: 29, ageMax: 38 },
-        { id: "associate", label: "Associate Professor", tenure: true, baseH: 18, baseSal: 110000, ageMin: 36, ageMax: 55 },
-        { id: "full", label: "Full Professor", tenure: true, baseH: 35, baseSal: 160000, ageMin: 45, ageMax: 75 }
+        { id: "associate", label: "Associate Professor", tenure: true, baseH: 18, baseSal: 105000, ageMin: 36, ageMax: 55 },
+        { id: "full", label: "Full Professor", tenure: true, baseH: 35, baseSal: 155000, ageMin: 45, ageMax: 75 }
     ],
     titles: ["Synthesis of {{compound}}", "Analysis of {{compound}}", "Review of {{compound}} derivatives", "Novel methods in {{field}}", "Mechanisms of {{compound}}"],
     compounds: ["Carbon Nanotubes", "Peptides", "Heavy Metals", "Polymers", "Catalysts", "Enzymes", "Graphene"],
@@ -93,8 +97,8 @@ const EMAILS_DB = {
         body: (schoolName) => `
             <p>Dear Chair,</p>
             <p>Welcome to <strong>${schoolName}</strong>.</p>
-            <p>Your finance dashboard is active. I expect you to maintain a 6-month runway at all times.</p>
-            <p>If you look at the <strong>Projection Graph</strong>, you will see exactly when we go broke if you don't secure new funding.</p>
+            <p>I have increased your block grant to cover basic payroll, but you are still reliant on Tuition drops in September and January to stay afloat.</p>
+            <p>Do not lose students. Do not lose grants. Good luck.</p>
             <br><p>Regards,<br>Dean Halloway</p>
         `
     }
