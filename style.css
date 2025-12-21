@@ -555,7 +555,125 @@ body {
 	border: 1px solid #d1d1d1;
 	font-family: var(--font-header);
 }
+/* EMAIL OUTLOOK LAYOUT */
+.outlook-layout {
+	display: flex;
+	height: 100%;
+	background: #fff;
+	border: 1px solid #ccc;
+}
 
+.email-list-pane {
+	width: 350px;
+	border-right: 1px solid #ddd;
+	display: flex;
+	flex-direction: column;
+	background: #f8f9fa;
+}
+
+.email-view-pane {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	background: #fff;
+	overflow-y: auto;
+}
+
+.outlook-header {
+	padding: 10px;
+	background: #f1f1f1;
+	border-bottom: 1px solid #ddd;
+	display: flex;
+	justify-content: space-between;
+	font-weight: bold;
+	font-size: 0.9rem;
+	color: #555;
+}
+
+.email-list-scroll {
+	overflow-y: auto;
+	flex: 1;
+}
+
+.email-item {
+	padding: 12px;
+	border-bottom: 1px solid #eee;
+	cursor: pointer;
+	transition: background 0.1s;
+}
+
+	.email-item:hover {
+		background: #eef2f5;
+	}
+
+	.email-item.unread {
+		background: #fff;
+		border-left: 4px solid #2980b9;
+	}
+
+	.email-item.read {
+		background: #f9f9f9;
+		color: #666;
+		border-left: 4px solid transparent;
+	}
+
+	.email-item.active {
+		background: #dbeaf9;
+		border-left: 4px solid #2980b9;
+	}
+
+.email-sender {
+	font-weight: bold;
+	font-size: 0.95rem;
+	margin-bottom: 2px;
+}
+
+.email-subject {
+	font-size: 0.85rem;
+	color: #444;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.email-date {
+	font-size: 0.75rem;
+	color: #999;
+	margin-top: 4px;
+	text-align: right;
+}
+
+/* EMAIL VIEW PANE */
+.email-view-header {
+	padding: 20px;
+	border-bottom: 1px solid #eee;
+	background: #fff;
+}
+
+.view-subject {
+	font-size: 1.4rem;
+	font-weight: bold;
+	margin-bottom: 5px;
+	color: #2c3e50;
+	font-family: var(--font-header);
+}
+
+.view-body {
+	padding: 30px;
+	line-height: 1.6;
+	color: #333;
+	font-size: 1rem;
+}
+
+.empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	color: #999;
+	font-style: italic;
+}
 .dossier-section {
 	margin-bottom: 25px;
 	border-bottom: 1px solid #eee;

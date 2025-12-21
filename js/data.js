@@ -20,12 +20,49 @@ const FAC_DATA = {
     ]
 };
 
+// --- NEW: RESEARCH MADLIBS ---
 const RESEARCH_DB = {
-    ADJECTIVES: ["Facile", "Novel", "One-Pot", "Enantioselective", "High-Yield", "Green", "Biomimetic", "Computational", "Rapid", "Scalable"],
-    METHODS: ["Synthesis", "Catalysis", "Activation", "Analysis", "Spectroscopy", "Modeling", "Polymerization", "Crystallization"],
-    TARGETS: ["Carbon Nanotubes", "Chiral Ligands", "Antibiotic Precursors", "Solar Cells", "Rare Earth Metals", "Protein Folding", "Quantum Dots", "C-H Bonds"],
-    APPLICATIONS: ["Drug Delivery", "Renewable Energy", "Cancer Therapy", "Industrial Coatings", "Quantum Computing", "Water Purification"]
+    ADJECTIVES: ["Facile", "Novel", "One-Pot", "Enantioselective", "High-Yield", "Green", "Biomimetic", "Computational", "Rapid", "Scalable", "Low-Temp", "Photo-Redox"],
+    METHODS: ["Synthesis", "Catalysis", "Activation", "Analysis", "Spectroscopy", "Modeling", "Polymerization", "Crystallization", "Functionalization", "Deposition"],
+    TARGETS: ["Carbon Nanotubes", "Chiral Ligands", "Antibiotic Precursors", "Solar Cells", "Rare Earth Metals", "Protein Folding", "Quantum Dots", "C-H Bonds", "Fluorinated Motifs", "Metal-Organic Frameworks"],
+    APPLICATIONS: ["Drug Delivery", "Renewable Energy", "Cancer Therapy", "Industrial Coatings", "Quantum Computing", "Water Purification", "Next-Gen Batteries", "Bio-Imaging"]
 };
+
+// --- NEW: RANDOM MANAGEMENT ISSUES ---
+const RANDOM_ISSUES = [
+    {
+        title: "Centrifuge War",
+        desc: "Dr. Smith and Dr. Jones are fighting over centrifuge access. It's disrupting the whole floor.",
+        choices: [
+            { text: "Buy a new unit ($5k)", cost: 5000, flavor: "Peace is expensive.", effect: "morale_boost" },
+            { text: "Make a schedule", cost: 0, flavor: "They grumble but comply.", effect: "morale_hit" }
+        ]
+    },
+    {
+        title: "Safety Violation",
+        desc: "EHS caught a grad student eating a sandwich in the organic lab. They are threatening a fine.",
+        choices: [
+            { text: "Pay Fine ($1k)", cost: 1000, flavor: "Problem goes away.", effect: "none" },
+            { text: "Mandatory Training", cost: 0, flavor: "Everyone loses a day of work.", effect: "productivity_hit" }
+        ]
+    },
+    {
+        title: "Freezer Failure",
+        desc: "The -80C freezer in the hallway has died. Samples are thawing!",
+        choices: [
+            { text: "Emergency Repair ($2k)", cost: 2000, flavor: "Fixed within hours.", effect: "none" },
+            { text: "Share Space", cost: 0, flavor: "Cram samples into other freezers. Risks contamination.", effect: "morale_hit" }
+        ]
+    },
+    {
+        title: "Alumni Donation",
+        desc: "A successful alum wants to donate to the department, but wants to give a boring speech first.",
+        choices: [
+            { text: "Host Event ($500)", cost: 500, flavor: "You schmooze effectively. Donation secured.", effect: "donation_small" },
+            { text: "Decline", cost: 0, flavor: "We don't have time for this.", effect: "none" }
+        ]
+    }
+];
 
 const RECRUITMENT = {
     BUDGETS: [
@@ -90,4 +127,5 @@ const ADMISSIONS = {
     FLYOUT_COST: 500, FLYOUT_BONUS: 15
 };
 
+// Date-specific events
 const EVENTS_DB = [];

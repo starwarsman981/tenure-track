@@ -5,8 +5,9 @@ const Game = {
     SPEEDS: { 0: null, 1: 2000, 2: 1000, 3: 250 },
     viewState: { mode: 'month', year: 2025, month: 7, day: 1 },
     rosterFilters: { rank: 'all', field: 'all', tenure: 'all', sort: 'hIndex' },
-    // --- NEW: ADMISSIONS FILTER ---
-    admissionsFilter: 'all', 
+    
+    // --- UPDATED: ADMISSIONS FILTERS ---
+    admissionsFilters: { field: 'all', gpa: 'all', rec: 'all' }, 
     financeTab: 'overview',
 
     showSetup: function() {
@@ -51,11 +52,6 @@ const Game = {
     },
 
     tick: function() {
-        if(State.data.pendingEvent) {
-            this.setSpeed(0); 
-            UI.showEventModal(State.data.pendingEvent);
-            return; 
-        }
         const oldMonth = State.data.month;
         State.advanceDay();
         UI.updateTopBar(State.data);
@@ -66,13 +62,6 @@ const Game = {
             this.viewState.day = 1;
         }
 
-        if(State.data.pendingEvent) {
-            this.setSpeed(0); 
-            UI.showEventModal(State.data.pendingEvent);
-            return;
-        }
-
-        // Render Active Screen
         const calScreen = document.getElementById('screen-calendar');
         if (!calScreen.classList.contains('hidden')) UI.renderCalendar(State.data, this.viewState);
         if (!document.getElementById('screen-finance').classList.contains('hidden')) UI.renderFinance(State.data, this.financeTab);
@@ -84,8 +73,6 @@ const Game = {
         const choice = State.data.pendingEvent.choices[choiceIdx];
         if (State.data.budget < choice.cost) { alert("Insufficient funds."); return; }
         State.resolveEventChoice(State.data.pendingEvent, choice);
-        const overlay = document.querySelector('.dossier-overlay');
-        if(overlay) overlay.remove();
         UI.updateTopBar(State.data); 
     },
 
@@ -94,8 +81,14 @@ const Game = {
         if(result) UI.renderAdmissions(State.data);
     },
 
-    offer: function(appId) {
-        State.extendOffer(parseInt(appId));
+    // --- UPDATED: Offer Handling ---
+    offer: function(appId, withFlyout=false) {
+        if(withFlyout && State.data.budget < 500) {
+            alert("Insufficient funds for flyout ($500).");
+            return;
+        }
+        State.extendOffer(parseInt(appId), withFlyout);
+        UI.updateTopBar(State.data);
         UI.renderAdmissions(State.data);
     },
 
@@ -111,9 +104,8 @@ const Game = {
         UI.renderAdmissions(State.data);
     },
 
-    // --- NEW: BULK VISIT WEEKEND ---
     triggerVisitWeekend: function() {
-        const cost = State.calculateVisitWeekendCost();
+        const cost = State.calculateVisitWeekendCost ? State.calculateVisitWeekendCost() : 2000;
         if(State.data.budget < cost) { alert(`Insufficient funds. Cost: $${cost.toLocaleString()}`); return; }
         if(confirm(`Host Visit Weekend for all pending candidates? Cost: $${cost.toLocaleString()}`)) {
             State.hostVisitWeekend();
@@ -122,9 +114,9 @@ const Game = {
         }
     },
 
-    // --- NEW: ADMISSIONS FILTER ---
-    setAdmissionsFilter: function(field) {
-        this.admissionsFilter = field;
+    // --- UPDATED: Filter Setter ---
+    setAdmissionsFilter: function(key, value) {
+        this.admissionsFilters[key] = value;
         UI.renderAdmissions(State.data);
     },
 
@@ -193,3 +185,12 @@ const Game = {
 window.onerror = function(message, source, lineno, colno, error) {
     console.error(`Global Error: ${message} at line ${lineno}`);
 };
+
+document.addEventListener('DOMContentLoaded', () => {
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach(btn => {
+        if(btn.innerText.includes('Settings')) {
+            btn.onclick = () => UI.showSettingsModal();
+        }
+    });
+});

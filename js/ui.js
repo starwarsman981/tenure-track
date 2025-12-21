@@ -51,6 +51,7 @@ const UI = {
             this.elements.navItems[screenName].classList.add('active');
         }
         
+        if (screenName === 'office') this.renderInbox(State.data.emails);
         if (screenName === 'calendar') this.renderCalendar(State.data, Game.viewState);
         if (screenName === 'faculty') this.renderFaculty(State.data.faculty, Game.rosterFilters);
         if (screenName === 'finance') this.renderFinance(State.data, Game.financeTab);
@@ -68,12 +69,71 @@ const UI = {
         }
     },
 
+    notifyNewEmail: function(sender, subject) {
+        const overlay = document.createElement('div');
+        overlay.className = 'dossier-overlay';
+        overlay.innerHTML = `
+            <div class="dossier-paper" style="max-width:400px; text-align:center;">
+                <h2 style="margin-top:0;">📨 New Message</h2>
+                <div style="font-size:1.1rem; margin:20px 0;">
+                    <div style="font-weight:bold; color:#2c3e50;">${sender}</div>
+                    <div style="color:#666;">"${subject}"</div>
+                </div>
+                <div style="background:#eee; padding:5px; font-size:0.8rem; margin-bottom:20px;">Game Paused</div>
+                <button class="btn-main">Go to Inbox</button>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        const btn = overlay.querySelector('button');
+        btn.onclick = () => {
+            overlay.remove();
+            Game.navigate('office');
+        };
+    },
+
+    showSettingsModal: function() {
+        Game.setSpeed(0);
+        const overlay = document.createElement('div');
+        overlay.className = 'dossier-overlay';
+        const s = State.data.settings || { pauseOnEmail: true, pauseOnPaper: false };
+        overlay.innerHTML = `
+            <div class="dossier-paper" style="max-width:400px;">
+                <h2 style="margin-top:0; border-bottom:1px solid #ccc; padding-bottom:10px;">Game Settings</h2>
+                <div style="margin:20px 0;">
+                    <h4 style="margin-bottom:10px;">Auto-Pause Preferences</h4>
+                    <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:10px; background:#f9f9f9; border:1px solid #eee;">
+                        <span>Pause on General Emails</span>
+                        <input type="checkbox" id="set-pause-email" ${s.pauseOnEmail ? 'checked' : ''}>
+                    </label>
+                    <label style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:10px; background:#f9f9f9; border:1px solid #eee;">
+                        <span>Pause on Faculty Publications</span>
+                        <input type="checkbox" id="set-pause-paper" ${s.pauseOnPaper ? 'checked' : ''}>
+                    </label>
+                    <div style="font-size:0.8rem; color:#666; font-style:italic;">
+                        Note: "Urgent" emails and random events will always pause the game.
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <button class="btn-main" id="close-settings">Save & Close</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        document.getElementById('close-settings').onclick = () => {
+            State.data.settings.pauseOnEmail = document.getElementById('set-pause-email').checked;
+            State.data.settings.pauseOnPaper = document.getElementById('set-pause-paper').checked;
+            overlay.remove();
+        };
+    },
+
     showRecruitmentSetupModal: function() {
         Game.setSpeed(0); 
         const overlay = document.createElement('div'); 
         overlay.className = 'dossier-overlay'; 
         overlay.style.zIndex = "200"; 
         
+        const activeLabs = State.data.faculty.filter(f => f.rank !== 'Adjunct').length;
+        const defaultTarget = Math.ceil(activeLabs * 1.3);
+
         let budgetsHtml = ""; 
         if(typeof RECRUITMENT !== 'undefined') {
             RECRUITMENT.BUDGETS.forEach(b => { 
@@ -86,11 +146,12 @@ const UI = {
                 <h2 style="margin-top:0;">Recruitment Strategy</h2>
                 <p>Allocating budget for the Dec 1st application deadline.</p>
                 <div class="form-group">
-                    <label>Target Cohort Size</label>
-                    <input type="number" id="recruit-target" value="7" min="1" max="20" style="width:100px;">
+                    <label>Target Cohort Size (Students)</label>
+                    <input type="number" id="recruit-target" value="${defaultTarget}" min="1" max="30" style="width:100px;">
+                    <small style="color:#666;">Recommendation: ${Math.max(1, defaultTarget-2)} - ${defaultTarget+2}</small>
                 </div>
                 <div class="form-group">
-                    <label>Marketing</label>
+                    <label>Marketing Budget</label>
                     <select id="recruit-budget">${budgetsHtml}</select>
                 </div>
                 <div style="margin-top:20px; text-align:right;">
@@ -104,11 +165,11 @@ const UI = {
             const target = document.getElementById('recruit-target').value;
             const strat = document.getElementById('recruit-budget').value;
             State.setRecruitmentStrategy(target, strat);
+            State.addEmail("Admin", "Strategy Confirmed", `We have set the target to ${target} students and authorized the marketing budget.`);
             overlay.remove();
         };
     },
 
-    // --- FINANCE SCREENS ---
     renderFinance: function(data, tab) { 
         const container = this.elements.screens.finance; 
         const tabs = [{ id: 'overview', label: 'Dashboard' }, { id: 'budget', label: 'Ledger' }, { id: 'grants', label: 'Grants' }]; 
@@ -137,7 +198,6 @@ const UI = {
         const last = fin.lastWeekSummary;
         const pol = data.policy || { overheadRate: 0.50, salaryMod: 1.0, stipendMod: 1.0 };
         
-        // Projections
         let projectedData = [];
         if(typeof FinanceSystem !== 'undefined') {
             projectedData = FinanceSystem.getProjection(data);
@@ -148,7 +208,54 @@ const UI = {
         const isSurplus = endOfYearBalance >= 0;
         const eoyColor = isSurplus ? '#27ae60' : '#c0392b';
 
-        // Controls HTML
+        // Breakdown Stats
+        const expFac = last.expense.faculty || 0;
+        const expStaff = (last.expense.staff || 0) + (last.expense.facility || 0);
+        const expRes = last.expense.research || 0;
+        const totalExp = expFac + expStaff + expRes || 1; 
+
+        const pFac = Math.round((expFac / totalExp) * 100);
+        const pStaff = Math.round((expStaff / totalExp) * 100);
+        const pRes = Math.round((expRes / totalExp) * 100);
+
+        // Pipeline Stats
+        const activeGrants = data.faculty.reduce((acc, f) => acc + f.grants.length, 0);
+        const pendingApps = data.faculty.reduce((acc, f) => acc + f.pendingApps.length, 0);
+        const totalReserves = data.faculty.reduce((acc, f) => acc + f.funds, 0);
+
+        const breakdownHtml = `
+            <div style="margin-bottom:20px; background:white; padding:15px; border:1px solid #ddd;">
+                <h4 style="margin-top:0; color:#555; font-size:0.9rem;">Weekly Expenditure Breakdown</h4>
+                <div style="display:flex; height:20px; width:100%; background:#eee; border-radius:10px; overflow:hidden; margin-bottom:10px;">
+                    <div style="width:${pFac}%; background:#3498db;" title="Faculty Salaries"></div>
+                    <div style="width:${pRes}%; background:#9b59b6;" title="Student Stipends & Research"></div>
+                    <div style="width:${pStaff}%; background:#95a5a6;" title="Staff & Facilities"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#666;">
+                    <div style="display:flex; align-items:center;"><div style="width:10px; height:10px; background:#3498db; margin-right:5px;"></div> Faculty (${pFac}%)</div>
+                    <div style="display:flex; align-items:center;"><div style="width:10px; height:10px; background:#9b59b6; margin-right:5px;"></div> Research (${pRes}%)</div>
+                    <div style="display:flex; align-items:center;"><div style="width:10px; height:10px; background:#95a5a6; margin-right:5px;"></div> Overhead (${pStaff}%)</div>
+                </div>
+            </div>
+        `;
+
+        const pipelineHtml = `
+            <div style="margin-bottom:20px; background:white; padding:15px; border:1px solid #ddd; display:flex; justify-content:space-between;">
+                <div>
+                    <div style="font-size:0.8rem; color:#888;">Active Grants</div>
+                    <div style="font-weight:bold; font-size:1.1rem; color:#27ae60;">${activeGrants}</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem; color:#888;">Pending Apps</div>
+                    <div style="font-weight:bold; font-size:1.1rem; color:#f39c12;">${pendingApps}</div>
+                </div>
+                <div>
+                    <div style="font-size:0.8rem; color:#888;">Faculty Reserves</div>
+                    <div style="font-weight:bold; font-size:1.1rem; color:#2c3e50;">$${(totalReserves/1000).toFixed(0)}k</div>
+                </div>
+            </div>
+        `;
+
         const controlsHtml = `
             <div style="background:#f4f4f4; padding:15px; border:1px solid #ddd; margin-bottom:20px;">
                 <h3 style="margin-top:0;">Fiscal Policy</h3>
@@ -156,17 +263,17 @@ const UI = {
                     <div>
                         <label style="font-size:0.8rem; font-weight:bold;">Overhead: ${(pol.overheadRate*100).toFixed(0)}%</label>
                         <input type="range" min="0.20" max="0.65" step="0.05" value="${pol.overheadRate}" onchange="State.setPolicy('overheadRate', this.value)" style="width:100%;">
-                        <div style="font-size:0.7rem; color:#666;">Income vs Morale</div>
+                        <div style="font-size:0.7rem; color:#666;">High overhead angers faculty.</div>
                     </div>
                     <div>
                         <label style="font-size:0.8rem; font-weight:bold;">Salaries: ${(pol.salaryMod*100).toFixed(0)}%</label>
                         <input type="range" min="0.95" max="1.10" step="0.01" value="${pol.salaryMod}" onchange="State.setPolicy('salaryMod', this.value)" style="width:100%;">
-                        <div style="font-size:0.7rem; color:#666;">Expense vs Morale</div>
+                        <div style="font-size:0.7rem; color:#666;">Impacts morale & retention.</div>
                     </div>
                     <div>
                         <label style="font-size:0.8rem; font-weight:bold;">Stipends: ${(pol.stipendMod*100).toFixed(0)}%</label>
                         <input type="range" min="0.90" max="1.10" step="0.01" value="${pol.stipendMod}" onchange="State.setPolicy('stipendMod', this.value)" style="width:100%;">
-                        <div style="font-size:0.7rem; color:#666;">Cost vs Quality</div>
+                        <div style="font-size:0.7rem; color:#666;">Impacts applicant quality.</div>
                     </div>
                 </div>
             </div>
@@ -191,16 +298,22 @@ const UI = {
                     </div>
                 </div>
             </div>
-            ${controlsHtml}
-            <div>
-                ${this.renderLineChart(projectedData, "52-Week Projection (Estimated)", isSurplus ? "#27ae60" : "#c0392b")}
+            
+            <div style="display:flex; gap:20px;">
+                <div style="flex:2;">
+                    ${controlsHtml}
+                    ${this.renderLineChart(projectedData, "52-Week Projection (Estimated)", isSurplus ? "#27ae60" : "#c0392b")}
+                </div>
+                <div style="flex:1;">
+                    ${breakdownHtml}
+                    ${pipelineHtml}
+                </div>
             </div>
         `;
     },
 
     renderFinanceBudget: function(container, data) { 
         const fin = data.finance; 
-        
         let rows = "";
         fin.weeklyLog.forEach(log => {
             if(log.summary) {
@@ -223,11 +336,9 @@ const UI = {
                     </td>
                 </tr>`;
             } else {
-                // Fallback for simple events (tuition drops not summarized)
                 rows += `<tr><td colspan="4" style="padding:8px; font-weight:bold; text-align:center; color:#2980b9;">${log.date}: ${log.summary ? '' : 'Transaction'} (${log.net >= 0 ? '+' : ''}${log.net})</td></tr>`;
             }
         });
-
         container.innerHTML = `<h3>Transaction Ledger</h3><div style="max-height:500px; overflow-y:auto; border:1px solid #ccc;"><table style="width:100%; border-collapse:collapse; background:white;"><thead style="background:#eee;"><tr><th style="padding:8px; text-align:left;">Date</th><th style="padding:8px; text-align:left;">Income</th><th style="padding:8px; text-align:left;">Expenses</th><th style="padding:8px; text-align:left;">Net</th></tr></thead><tbody>${rows}</tbody></table></div>`; 
     },
 
@@ -242,15 +353,12 @@ const UI = {
         container.innerHTML = html; 
     },
 
-    // --- FACULTY SCREEN ---
     renderFaculty: function(roster, filters) { 
         const container = this.elements.screens.faculty; 
         container.innerHTML = ''; 
-        
         let displayList = [...roster]; 
         if (filters.rank !== 'all') displayList = displayList.filter(p => p.rank === filters.rank); 
         if (filters.field !== 'all') displayList = displayList.filter(p => p.field === filters.field); 
-        
         displayList.sort((a, b) => { 
             if (filters.sort === 'runway') { 
                 const rA = a.runway === 'Inf' ? 999 : parseFloat(a.runway); 
@@ -259,9 +367,7 @@ const UI = {
             } 
             return b[filters.sort] - a[filters.sort]; 
         }); 
-
         const isSel = (cat, val) => filters[cat] === val ? 'selected' : '';
-
         const toolbar = document.createElement('div'); 
         toolbar.className = 'cal-toolbar'; 
         toolbar.innerHTML = `
@@ -291,15 +397,12 @@ const UI = {
                 </select>
             </div>`; 
         container.appendChild(toolbar); 
-        
         const grid = document.createElement('div'); 
         grid.className = 'roster-grid'; 
-        
         displayList.forEach(prof => { 
             const card = document.createElement('div'); 
             card.className = `prof-card rank-${prof.rank}`; 
             card.onclick = () => UI.showDossier(prof); 
-            
             let runwayColor = "#555"; 
             if (prof.runway !== 'Inf' && prof.runway !== 'Stable') { 
                 const r = parseFloat(prof.runway); 
@@ -307,14 +410,11 @@ const UI = {
                 else if (r < 12) runwayColor = "#f39c12"; 
                 else runwayColor = "#27ae60"; 
             } 
-            
             let fundsDisplay = prof.rank === 'Adjunct' ? "No Lab" : `$${(prof.funds/1000).toFixed(0)}k Reserves`;
             if (prof.grants.length > 0) fundsDisplay = `${prof.grants.length} Active Grants`;
-
             let happyColor = "#27ae60";
             if(prof.happiness < 70) happyColor = "#f39c12";
             if(prof.happiness < 40) happyColor = "#c0392b";
-
             card.innerHTML = `
                 <div class="prof-header">
                     <div><div class="prof-name">Dr. ${prof.name}</div><div class="prof-title">${prof.rankLabel}</div></div>
@@ -331,20 +431,15 @@ const UI = {
     showDossier: function(prof) { 
         const overlay = document.createElement('div'); overlay.className = 'dossier-overlay'; 
         overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); }; 
-        
         let grantHtml = `<div style="margin-top:5px; font-style:italic; color:#666;">Source: ${prof.fundingSourceLabel}</div>`; 
         if(prof.grants.length > 0) { 
             grantHtml = prof.grants.map(g => `<div style="display:flex; justify-content:space-between; border-bottom:1px dashed #ccc; padding:3px 0;"><span>${g.name}</span><span>$${g.remaining.toLocaleString()}</span></div>`).join(''); 
         } 
-        
         if(prof.pendingApps && prof.pendingApps.length > 0) {
             grantHtml += `<div style="margin-top:10px; font-weight:bold; font-size:0.8rem; color:#2980b9;">PENDING APPLICATIONS</div>`;
             grantHtml += prof.pendingApps.map(a => `<div style="font-size:0.8rem; display:flex; justify-content:space-between;"><span>${a.agency} ($${(a.amount/1000).toFixed(0)}k)</span><span>${a.weeksToDecision - a.weeksPending} wks</span></div>`).join('');
         }
-
-        // Student Profile Helper
         const toGrade = (val) => val > 90 ? 'A' : (val > 80 ? 'B' : (val > 70 ? 'C' : 'D'));
-
         let studentHtml = `<div style="color:#999; font-style:italic;">No students.</div>`; 
         if(prof.students && prof.students.length > 0) { 
             const group = State.data.students.filter(s => prof.students.includes(s.id)); 
@@ -362,12 +457,10 @@ const UI = {
                 </div>`;
             }).join(''); 
         } 
-        
         overlay.innerHTML = `<div class="dossier-paper"><h2 style="margin-top:0; border-bottom:2px solid #333; padding-bottom:10px;">${prof.name}</h2><div class="dossier-section"><div class="dossier-label">Overview</div><div class="dossier-data">${prof.rankLabel} of ${prof.field} Chemistry</div><div class="dossier-data">Age: ${prof.age} | Salary: $${prof.salary.toLocaleString()}</div></div><div class="dossier-section"><div class="dossier-label">Financials</div><div class="dossier-data">Burn Rate: <span style="color:${FINANCE.COLORS.expense}">$${prof.burnRate.toLocaleString()}/mo</span></div><div class="dossier-data">Reserves: $${prof.funds.toLocaleString()}</div><div style="margin-top:10px; background:#eee; padding:10px; border-radius:4px;">${grantHtml}</div></div><div class="dossier-section"><div class="dossier-label">Lab Group (${prof.students ? prof.students.length : 0})</div><div style="max-height:200px; overflow-y:auto; border:1px solid #ddd; background:white; padding:10px;">${studentHtml}</div></div><button class="btn-main" onclick="document.querySelector('.dossier-overlay').remove()">Close Dossier</button></div>`; 
         document.body.appendChild(overlay); 
     },
 
-    // --- ADMISSIONS SCREEN ---
     renderAdmissions: function(data) {
         const existingList = document.getElementById('adm-list-container');
         let scrollPos = 0; if(existingList) scrollPos = existingList.scrollTop;
@@ -376,15 +469,63 @@ const UI = {
         if (!adm.pool || adm.pool.length === 0) {
             let status = "Admissions Cycle"; let subtext = "";
             if (data.month === 7 && data.day < 15) { status = "Pre-Season"; subtext = "Recruitment Strategy meeting is on Aug 15."; } 
-            else if (!adm.setupComplete) { status = "Strategy Needed"; subtext = "Waiting for strategy setup..."; } 
-            else { status = "Recruitment Active"; subtext = `Marketing in progress. Applications arrive Dec 1.`; }
+            else if (!adm.setupComplete) { status = "Strategy Needed"; subtext = "Check your email to set the recruitment strategy."; } 
+            else { status = "Recruitment Active"; subtext = `Target Cohort: ${adm.targetSize} Students. Applications arrive Dec 1.`; }
             container.innerHTML = `<div class="empty-state"><h2>${status}</h2><p>${subtext}</p></div>`; return;
         }
 
         let displayPool = adm.pool;
-        if(Game.admissionsFilter && Game.admissionsFilter !== 'all') { displayPool = displayPool.filter(a => a.interest === Game.admissionsFilter); }
+        const f = Game.admissionsFilters;
+        if(f.field !== 'all') displayPool = displayPool.filter(a => a.interest === f.field);
+        if(f.gpa !== 'all') {
+            if(f.gpa === 'high') displayPool = displayPool.filter(a => parseFloat(a.application.gpa) >= 3.8);
+            if(f.gpa === 'mid') displayPool = displayPool.filter(a => parseFloat(a.application.gpa) >= 3.3 && parseFloat(a.application.gpa) < 3.8);
+            if(f.gpa === 'low') displayPool = displayPool.filter(a => parseFloat(a.application.gpa) < 3.3);
+        }
+        if(f.rec !== 'all') {
+            if(f.rec === 'strong') displayPool = displayPool.filter(a => a.application.recScore >= 8);
+            if(f.rec === 'avg') displayPool = displayPool.filter(a => a.application.recScore >= 5 && a.application.recScore < 8);
+            if(f.rec === 'weak') displayPool = displayPool.filter(a => a.application.recScore < 5);
+        }
 
-        container.innerHTML = `<div class="outlook-layout"><div class="email-list-pane"><div class="outlook-header"><span>Apps: ${displayPool.length}</span><select onchange="Game.setAdmissionsFilter(this.value)" style="font-size:0.8rem;"><option value="all">All</option><option value="Organic">Organic</option><option value="Inorganic">Inorganic</option><option value="Physical">Physical</option></select></div><div class="email-list-scroll" id="adm-list-container"></div></div><div class="email-view-pane" id="adm-detail-container"><div class="empty-state">Select an applicant.</div></div></div>`;
+        const offersCount = adm.pool.filter(a => a.status === "Offer Extended" || a.status === "Accepted").length;
+        const targetOffers = Math.ceil(adm.targetSize * 1.5);
+        const offersPercent = Math.min(100, (offersCount / targetOffers) * 100);
+
+        container.innerHTML = `
+        <div class="outlook-layout">
+            <div class="email-list-pane">
+                <div style="background:#2c3e50; color:white; padding:10px; font-size:0.8rem;">
+                    <div>Offers Extended: <strong>${offersCount}</strong> / Target: <strong>${targetOffers}</strong></div>
+                    <div style="background:rgba(255,255,255,0.2); height:5px; margin-top:5px; border-radius:3px;">
+                        <div style="width:${offersPercent}%; background:#2ecc71; height:100%; border-radius:3px;"></div>
+                    </div>
+                </div>
+                <div class="outlook-header" style="flex-wrap:wrap; gap:5px; padding:5px;">
+                    <select onchange="Game.setAdmissionsFilter('field', this.value)" style="font-size:0.75rem; flex:1;">
+                        <option value="all" ${f.field==='all'?'selected':''}>Field: All</option>
+                        <option value="Organic" ${f.field==='Organic'?'selected':''}>Organic</option>
+                        <option value="Inorganic" ${f.field==='Inorganic'?'selected':''}>Inorganic</option>
+                        <option value="Physical" ${f.field==='Physical'?'selected':''}>Physical</option>
+                    </select>
+                    <select onchange="Game.setAdmissionsFilter('gpa', this.value)" style="font-size:0.75rem; flex:1;">
+                        <option value="all" ${f.gpa==='all'?'selected':''}>GPA: All</option>
+                        <option value="high" ${f.gpa==='high'?'selected':''}>High (3.8+)</option>
+                        <option value="mid" ${f.gpa==='mid'?'selected':''}>Mid (3.3+)</option>
+                        <option value="low" ${f.gpa==='low'?'selected':''}>Low</option>
+                    </select>
+                    <select onchange="Game.setAdmissionsFilter('rec', this.value)" style="font-size:0.75rem; flex:1;">
+                        <option value="all" ${f.rec==='all'?'selected':''}>Rec: All</option>
+                        <option value="strong" ${f.rec==='strong'?'selected':''}>Strong (8+)</option>
+                        <option value="avg" ${f.rec==='avg'?'selected':''}>Avg (5-7)</option>
+                        <option value="weak" ${f.rec==='weak'?'selected':''}>Weak</option>
+                    </select>
+                </div>
+                <div class="email-list-scroll" id="adm-list-container"></div>
+            </div>
+            <div class="email-view-pane" id="adm-detail-container"><div class="empty-state">Select an applicant.</div></div>
+        </div>`;
+        
         const listContainer = document.getElementById('adm-list-container');
         const detailContainer = document.getElementById('adm-detail-container');
 
@@ -394,7 +535,9 @@ const UI = {
             item.onclick = () => { adm.selectedApplicantId = app.id; UI.renderAdmissions(data); };
             
             let tags = "";
+            if(app.isInternational) tags += `<span style="background:#8e44ad; color:#fff; padding:1px 4px; font-size:0.7rem; border-radius:3px; margin-right:5px;">INTL</span>`;
             if(app.application.hasFellowship) tags += `<span style="background:#f1c40f; color:#fff; padding:1px 4px; font-size:0.7rem; border-radius:3px; margin-right:5px;">Fellowship</span>`;
+            
             let statusBadge = app.status;
             if(app.status === 'Offer Extended') statusBadge = '📜 Offer Sent';
             if(app.status === 'Accepted') statusBadge = '✅ Accepted';
@@ -432,21 +575,40 @@ const UI = {
                     matchHtml = app.matches.map(m => `<div><strong style="color:#2c3e50;">${m.name}</strong>: ${m.reason}</div>`).join('');
                 }
                 
-                let felHtml = app.application.hasFellowship ? `<div style="background:#fffbf0; border:1px solid #f1c40f; padding:10px; margin-bottom:10px; color:#b7950b;"><strong>🌟 External Fellowship:</strong> Free to department!</div>` : '';
+                // --- FACULTY OPINIONS UI ---
+                let opinionHtml = "";
+                if (app.lobbying) {
+                    const color = app.lobbying.type === 'support' ? '#d4edda' : '#f8d7da';
+                    const border = app.lobbying.type === 'support' ? '#c3e6cb' : '#f5c6cb';
+                    const icon = app.lobbying.type === 'support' ? '👍' : '👎';
+                    opinionHtml = `<div style="background:${color}; border:1px solid ${border}; padding:10px; margin-bottom:10px; border-radius:4px; font-size:0.9rem;"><strong>${icon} Faculty Opinion:</strong> ${app.lobbying.text}</div>`;
+                }
+
+                let felHtml = "";
+                if(app.application.hasFellowship) felHtml = `<div style="background:#fffbf0; border:1px solid #f1c40f; padding:10px; margin-bottom:10px; color:#b7950b;"><strong>🌟 External Fellowship:</strong> Free to department!</div>`;
+                if(app.isInternational) felHtml += `<div style="background:#f3e5f5; border:1px solid #8e44ad; padding:10px; margin-bottom:10px; color:#6c3483;"><strong>🌍 International Student:</strong> Cannot use Federal Grants. Visa Risk: Moderate.</div>`;
+
                 const rs = app.application.recScore;
                 const recColor = rs >= 8 ? '#27ae60' : (rs <= 4 ? '#c0392b' : '#f39c12');
 
                 let mainButtons = '';
                 if(app.status === 'Pending') {
                     mainButtons = `
-                        <button class="btn-main" style="background:#27ae60;" onclick="Game.offer('${app.id}')">Extend Offer</button>
-                        <button class="btn-main" style="background:#f39c12;" onclick="State.sweetenOffer('${app.id}')">Sweeten ($5k)</button>
-                        <button class="btn-main" style="background:#c0392b;" onclick="Game.reject('${app.id}')">Reject</button>
+                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                            <button class="btn-main" style="background:#27ae60; flex:1;" onclick="Game.offer('${app.id}', false)">Extend Offer</button>
+                            <button class="btn-main" style="background:#2980b9; flex:1;" onclick="Game.offer('${app.id}', true)">Offer + Flyout (-$500)</button>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn-main" style="background:#f39c12; flex:1;" onclick="State.sweetenOffer('${app.id}')">Sweeten (Dean's Bonus)</button>
+                            <button class="btn-main" style="background:#c0392b; flex:1;" onclick="Game.reject('${app.id}')">Reject</button>
+                        </div>
                     `;
-                    if(!app.flownOut) { mainButtons += `<br><br><button class="btn-small" onclick="Game.flyout('${app.id}')">Individual Flyout ($500)</button>`; }
+                    if(!app.flownOut) { 
+                        mainButtons += `<div style="margin-top:10px; text-align:center;"><button class="btn-small" onclick="Game.flyout('${app.id}')">Just Flyout (No Offer yet) - $500</button></div>`; 
+                    }
                 } else mainButtons = `<div style="font-weight:bold;">Status: ${app.status}</div>`;
 
-                detailContainer.innerHTML = `<div class="email-view-header"><div class="view-subject">${app.name}</div><div class="view-meta"><span>Field: <strong>${app.interest}</strong></span><span>Rec Letter: <strong style="color:${recColor}">${rs}/10</strong></span></div><div style="margin-top:15px;">${mainButtons}</div></div><div class="view-body">${felHtml}<div style="display:flex; gap:20px; margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:20px;"><div style="flex:1;"><div class="dossier-label">Record</div><div>GPA: ${app.application.gpa}</div><div>GRE: ${app.application.gre}</div><div style="margin-top:5px; font-style:italic; font-size:0.9rem;">"${app.facultyNote}"</div></div><div style="flex:1; background:#fffdf5; padding:10px; border:1px solid #efe8d0;"><div class="dossier-label">Faculty Alignment</div>${matchHtml}</div></div><div style="margin-bottom:20px; background:#f0f4f8; padding:10px; border-radius:4px;"><div class="dossier-label">True Potential (Evaluations)</div>${statsHtml}</div><div class="dossier-label">Interview (${app.interview.points} pts remaining)</div><div style="margin-bottom:10px;">${actionsHtml}</div><div style="background:#fff; border:1px solid #eee; padding:15px; max-height:200px; overflow-y:auto;">${chatHtml}</div></div>`;
+                detailContainer.innerHTML = `<div class="email-view-header"><div class="view-subject">${app.name}</div><div class="view-meta"><span>Field: <strong>${app.interest}</strong></span><span>Rec Letter: <strong style="color:${recColor}">${rs}/10</strong></span></div><div style="margin-top:15px;">${mainButtons}</div></div><div class="view-body">${felHtml}${opinionHtml}<div style="display:flex; gap:20px; margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:20px;"><div style="flex:1;"><div class="dossier-label">Record</div><div>GPA: ${app.application.gpa}</div><div>GRE: ${app.application.gre}</div><div style="margin-top:5px; font-style:italic; font-size:0.9rem;">"${app.facultyNote}"</div></div><div style="flex:1; background:#fffdf5; padding:10px; border:1px solid #efe8d0;"><div class="dossier-label">Faculty Alignment</div>${matchHtml}</div></div><div style="margin-bottom:20px; background:#f0f4f8; padding:10px; border-radius:4px;"><div class="dossier-label">True Potential (Evaluations)</div>${statsHtml}</div><div class="dossier-label">Interview (${app.interview.points} pts remaining)</div><div style="margin-bottom:10px;">${actionsHtml}</div><div style="background:#fff; border:1px solid #eee; padding:15px; max-height:200px; overflow-y:auto;">${chatHtml}</div></div>`;
             }
         }
     },
@@ -493,7 +655,64 @@ const UI = {
         overlay.innerHTML = `<div class="dossier-paper" style="max-width:500px;"><h2 style="margin-top:0; border-bottom:2px solid #333; padding-bottom:10px;">${event.title}</h2><p style="font-size:1.1rem; line-height:1.5; color:#444; margin-bottom:20px;">${event.desc}</p><div style="background:#f4f4f4; padding:20px; border:1px solid #ddd;">${choiceHtml}</div></div>`; document.body.appendChild(overlay);
     },
 
-    renderInbox: function(emails) { const container = this.elements.screens.office; if (!container.querySelector('.outlook-layout')) { container.innerHTML = `<div class="outlook-layout"><div class="email-list-pane"><div class="outlook-header"><span>Inbox</span><span id="unread-count"></span></div><div class="email-list-scroll" id="email-list-container"></div></div><div class="email-view-pane"><div id="email-reading-view" class="hidden"><div class="email-view-header"><div class="view-subject" id="view-subject"></div><div id="view-from"></div><div id="view-date" style="font-size:0.8rem; color:#888;"></div></div><div class="view-body" id="view-body"></div></div><div id="email-empty-view" class="empty-state">Select an email to read.</div></div></div>`; } const listContainer = document.getElementById('email-list-container'); listContainer.innerHTML = ''; let unread = 0; emails.forEach(email => { if(!email.read) unread++; const item = document.createElement('div'); item.className = `email-item ${email.read ? 'read' : 'unread'}`; item.onclick = () => UI.openEmail(email.id); item.innerHTML = `<div class="email-sender">${email.sender}</div><div class="email-subject">${email.subject}</div><div class="email-date">${email.date}</div>`; listContainer.appendChild(item); }); document.getElementById('unread-count').innerText = unread > 0 ? `${unread} Unread` : ''; },
-    openEmail: function(id) { const email = State.data.emails.find(e => e.id === id); if (!email) return; email.read = true; this.renderInbox(State.data.emails); document.getElementById('email-empty-view').classList.add('hidden'); document.getElementById('email-reading-view').classList.remove('hidden'); document.getElementById('view-subject').innerText = email.subject; document.getElementById('view-from').innerText = `From: ${email.sender}`; document.getElementById('view-date').innerText = email.date; document.getElementById('view-body').innerHTML = email.body; },
+    renderInbox: function(emails) { 
+        const container = this.elements.screens.office; 
+        
+        if (!container.querySelector('.outlook-layout')) { 
+            container.innerHTML = `
+                <div class="outlook-layout">
+                    <div class="email-list-pane">
+                        <div class="outlook-header">
+                            <span>Inbox</span><span id="unread-count"></span>
+                        </div>
+                        <div class="email-list-scroll" id="email-list-container"></div>
+                    </div>
+                    <div class="email-view-pane">
+                        <div id="email-reading-view" class="hidden">
+                            <div class="email-view-header">
+                                <div class="view-subject" id="view-subject"></div>
+                                <div id="view-from" style="font-weight:bold; color:#2c3e50;"></div>
+                                <div id="view-date" style="font-size:0.8rem; color:#888;"></div>
+                            </div>
+                            <div class="view-body" id="view-body"></div>
+                        </div>
+                        <div id="email-empty-view" class="empty-state">Select an email to read.</div>
+                    </div>
+                </div>`; 
+        } 
+        
+        const listContainer = document.getElementById('email-list-container'); 
+        listContainer.innerHTML = ''; 
+        
+        let unread = 0; 
+        emails.forEach(email => { 
+            if(!email.read) unread++; 
+            const item = document.createElement('div'); 
+            item.className = `email-item ${email.read ? 'read' : 'unread'}`; 
+            item.onclick = () => UI.openEmail(email.id); 
+            item.innerHTML = `
+                <div class="email-sender">${email.sender}</div>
+                <div class="email-subject">${email.subject}</div>
+                <div class="email-date">${email.date}</div>`; 
+            listContainer.appendChild(item); 
+        }); 
+        
+        const countSpan = document.getElementById('unread-count');
+        if(countSpan) countSpan.innerText = unread > 0 ? `${unread} Unread` : ''; 
+    },
+
+    openEmail: function(id) { 
+        const email = State.data.emails.find(e => e.id === id); 
+        if (!email) return; 
+        email.read = true; 
+        this.renderInbox(State.data.emails); 
+        document.getElementById('email-empty-view').classList.add('hidden'); 
+        document.getElementById('email-reading-view').classList.remove('hidden'); 
+        document.getElementById('view-subject').innerText = email.subject; 
+        document.getElementById('view-from').innerText = `From: ${email.sender}`; 
+        document.getElementById('view-date').innerText = email.date; 
+        document.getElementById('view-body').innerHTML = email.body; 
+    },
+    
     renderLineChart: function(data, label, color) { if (!data || data.length === 0) return ''; const width = 600; const height = 150; const maxVal = Math.max(...data, 10000); const minVal = Math.min(...data, 0); const range = maxVal - minVal || 1000; const points = data.map((val, i) => { let x = data.length > 1 ? (i / (data.length - 1)) * width : width / 2; const y = height - ((val - minVal) / range * height); return `${x},${y}`; }).join(' '); const zeroY = height - ((0 - minVal) / range * height); return `<div style="margin-bottom:20px; background:white; padding:10px; border:1px solid #ddd;"><div style="font-size:0.8rem; font-weight:bold; margin-bottom:5px;">${label}</div><svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}"><line x1="0" y1="${zeroY}" x2="${width}" y2="${zeroY}" stroke="#ccc" stroke-dasharray="4" /><polyline fill="none" stroke="${color}" stroke-width="3" points="${points}" /></svg></div>`; }
 };
