@@ -16,7 +16,8 @@ const UI = {
             finance: document.getElementById('screen-finance'),
             students: document.getElementById('screen-students'),
             records: document.getElementById('screen-records'), // <--- CHECK THIS LINE
-            admissions: document.getElementById('screen-admissions')
+            admissions: document.getElementById('screen-admissions'),
+            search: document.getElementById('screen-search'),
         },
         navItems: {
             office: document.getElementById('nav-office'),
@@ -25,7 +26,8 @@ const UI = {
             finance: document.getElementById('nav-finance'),
             students: document.getElementById('nav-students'),
             records: document.getElementById('nav-records'), // <--- AND THIS LINE
-            admissions: document.getElementById('nav-admissions')
+            admissions: document.getElementById('nav-admissions'),
+            search: document.getElementById('nav-search'),
         }
     },
     // ... rest of the code ...
@@ -62,6 +64,7 @@ const UI = {
         if (screenName === 'faculty') this.renderFaculty(State.data.faculty, Game.rosterFilters);
         if (screenName === 'finance') this.renderFinance(State.data, Game.financeTab);
         if (screenName === 'admissions') this.renderAdmissions(State.data);
+        if (screenName === 'search') this.renderFacultySearch(State.data);
     },
 
     toggleGameView: function(isGameActive) {
@@ -672,7 +675,10 @@ const UI = {
         let columnsHtml = "";
         for(let i=1; i<=5; i++) {
             const cohortList = cohorts[i];
-            const title = i === 5 ? "G5+" : `G${i}`;
+            
+            // --- NEW: Added Counts to Title ---
+            const count = cohortList.length;
+            const title = i === 5 ? `G5+ (${count})` : `G${i} (${count})`;
             const sub = i === 1 ? "Rotations/Classes" : (i === 2 ? "Quals Prep" : "Dissertation");
             
             let cards = cohortList.map(s => {
@@ -721,7 +727,6 @@ const UI = {
             </div>
         `;
     },
-
     renderPieChart: function(counts) {
         const total = counts.RA + counts.TA + counts.Fellowship || 1;
         const raP = (counts.RA / total) * 100;
@@ -857,12 +862,24 @@ renderRecords: function(data) {
     renderInbox: function(emails) { 
         const container = this.elements.screens.office; 
         
+        // 1. Setup the Layout (if not exists)
         if (!container.querySelector('.outlook-layout')) { 
             container.innerHTML = `
                 <div class="outlook-layout">
                     <div class="email-list-pane">
-                        <div class="outlook-header">
-                            <span>Inbox</span><span id="unread-count"></span>
+                        <div class="outlook-header" style="flex-direction:column; align-items:flex-start; gap:10px;">
+                            <div style="display:flex; justify-content:space-between; width:100%;">
+                                <span>Inbox</span><span id="unread-count"></span>
+                            </div>
+                            
+                            <select onchange="Game.setEmailFilter(this.value)" style="width:100%; padding:5px; border:1px solid #ccc; border-radius:3px; font-size:0.85rem;">
+                                <option value="all">Show All</option>
+                                <option value="urgent">⚠️ Dilemmas & Urgent</option>
+                                <option value="paper">📄 Publications</option>
+                                <option value="search">🔎 Faculty Search</option>
+                                <option value="admissions">🎓 Admissions</option>
+                                <option value="finance">💰 Finance & Grants</option>
+                            </select>
                         </div>
                         <div class="email-list-scroll" id="email-list-container"></div>
                     </div>
@@ -883,21 +900,63 @@ renderRecords: function(data) {
         const listContainer = document.getElementById('email-list-container'); 
         listContainer.innerHTML = ''; 
         
-        let unread = 0; 
-        emails.forEach(email => { 
-            if(!email.read) unread++; 
-            const item = document.createElement('div'); 
-            item.className = `email-item ${email.read ? 'read' : 'unread'}`; 
-            item.onclick = () => UI.openEmail(email.id); 
-            item.innerHTML = `
-                <div class="email-sender">${email.sender}</div>
-                <div class="email-subject">${email.subject}</div>
-                <div class="email-date">${email.date}</div>`; 
-            listContainer.appendChild(item); 
-        }); 
+        // 2. Filter Logic
+        const filter = Game.emailFilter || 'all';
         
+        const filteredEmails = emails.filter(e => {
+            if (filter === 'all') return true;
+            
+            // Filter: Dilemmas (Urgent red emails)
+            if (filter === 'urgent') return e.category === 'urgent' || e.subject.includes('Action:');
+            
+            // Filter: Papers (Blue notifications)
+            if (filter === 'paper') return e.category === 'paper' || e.subject.includes('Accepted');
+            
+            // Filter: Faculty Search
+            if (filter === 'search') return e.sender.includes('Search') || e.subject.includes('Candidate') || e.subject.includes('Job Ad');
+            
+            // Filter: Admissions (Student offers, acceptances)
+            if (filter === 'admissions') return e.sender.includes('Admissions') || e.sender.includes('Events') || e.subject.includes('Acceptance') || e.subject.includes('Declined') || e.subject.includes('Visit');
+            
+            // Filter: Finance (Bursar, OSP, Grants)
+            if (filter === 'finance') return e.sender === 'Bursar' || e.sender === 'OSP' || e.sender === 'Provost' || e.subject.includes('Grant') || e.subject.includes('Award');
+            
+            return false;
+        });
+
+        // 3. Render List
+        let unread = 0; 
+        emails.forEach(e => { if(!e.read) unread++; }); // Count total unread, not just filtered
+
+        if (filteredEmails.length === 0) {
+            listContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#999; font-style:italic;">No emails in this folder.</div>`;
+        } else {
+            filteredEmails.forEach(email => { 
+                const item = document.createElement('div'); 
+                item.className = `email-item ${email.read ? 'read' : 'unread'}`; 
+                
+                // Add color strip based on type
+                if(email.category === 'urgent') item.style.borderLeftColor = "#c0392b"; // Red
+                else if(email.category === 'paper') item.style.borderLeftColor = "#2980b9"; // Blue
+                else if(email.sender.includes('Search')) item.style.borderLeftColor = "#8e44ad"; // Purple
+                else if(email.sender === 'OSP') item.style.borderLeftColor = "#27ae60"; // Green
+
+                item.onclick = () => UI.openEmail(email.id); 
+                item.innerHTML = `
+                    <div class="email-sender">${email.sender}</div>
+                    <div class="email-subject">${email.subject}</div>
+                    <div class="email-date">${email.date}</div>`; 
+                listContainer.appendChild(item); 
+            }); 
+        }
+        
+        // Update unread count
         const countSpan = document.getElementById('unread-count');
         if(countSpan) countSpan.innerText = unread > 0 ? `${unread} Unread` : ''; 
+        
+        // Ensure the dropdown reflects current state (fixes UI glitch if re-rendering)
+        const dropdown = container.querySelector('select');
+        if(dropdown) dropdown.value = filter;
     },
 
     openEmail: function(id) { 
@@ -913,5 +972,114 @@ renderRecords: function(data) {
         document.getElementById('view-body').innerHTML = email.body; 
     },
     
-    renderLineChart: function(data, label, color) { if (!data || data.length === 0) return ''; const width = 600; const height = 150; const maxVal = Math.max(...data, 10000); const minVal = Math.min(...data, 0); const range = maxVal - minVal || 1000; const points = data.map((val, i) => { let x = data.length > 1 ? (i / (data.length - 1)) * width : width / 2; const y = height - ((val - minVal) / range * height); return `${x},${y}`; }).join(' '); const zeroY = height - ((0 - minVal) / range * height); return `<div style="margin-bottom:20px; background:white; padding:10px; border:1px solid #ddd;"><div style="font-size:0.8rem; font-weight:bold; margin-bottom:5px;">${label}</div><svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}"><line x1="0" y1="${zeroY}" x2="${width}" y2="${zeroY}" stroke="#ccc" stroke-dasharray="4" /><polyline fill="none" stroke="${color}" stroke-width="3" points="${points}" /></svg></div>`; }
+    renderLineChart: function(data, label, color) { if (!data || data.length === 0) return ''; const width = 600; const height = 150; const maxVal = Math.max(...data, 10000); const minVal = Math.min(...data, 0); const range = maxVal - minVal || 1000; const points = data.map((val, i) => { let x = data.length > 1 ? (i / (data.length - 1)) * width : width / 2; const y = height - ((val - minVal) / range * height); return `${x},${y}`; }).join(' '); const zeroY = height - ((0 - minVal) / range * height); return `<div style="margin-bottom:20px; background:white; padding:10px; border:1px solid #ddd;"><div style="font-size:0.8rem; font-weight:bold; margin-bottom:5px;">${label}</div><svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}"><line x1="0" y1="${zeroY}" x2="${width}" y2="${zeroY}" stroke="#ccc" stroke-dasharray="4" /><polyline fill="none" stroke="${color}" stroke-width="3" points="${points}" /></svg></div>`; },
+
+    renderFacultySearch: function(data) {
+        const container = this.elements.screens.search;
+        const search = data.facultySearch;
+
+        if(!search || !search.active) {
+            container.innerHTML = `<div class="empty-state"><h2>No Active Search</h2><p>Wait for August 20th to request a faculty line.</p></div>`;
+            return;
+        }
+
+        if(search.phase === "ads") {
+             container.innerHTML = `<div class="empty-state"><h2>Advertising...</h2><p>Collecting CVs. <button class="btn-main" onclick="State.generateFacultyCandidates()">Fast Forward to October (Debug)</button></p></div>`;
+             return;
+        }
+
+        // List View
+        let listHtml = search.pool.map(c => {
+            let tierBadge = "";
+            if(c.pedigree.tier === 1) tierBadge = "⭐ Elite";
+            let statusStyle = "";
+            if(c.status === "Shortlist") statusStyle = "border-left: 4px solid #27ae60; background:#f0fcf4;";
+
+            return `
+            <div class="email-item" style="${statusStyle}" onclick="UI.viewCV(${c.id})">
+                <div class="email-sender">${c.name} <span style="font-size:0.7rem; color:#f39c12">${tierBadge}</span></div>
+                <div class="email-subject">${c.pedigree.phd} -> ${c.pedigree.postdoc}</div>
+                <div class="email-date">H-Index: ${c.hIndex}</div>
+            </div>`;
+        }).join('');
+
+        container.innerHTML = `
+        <div class="outlook-layout">
+            <div class="email-list-pane">
+                <div class="outlook-header">Candidate Pool (${search.pool.length})</div>
+                <div class="email-list-scroll">${listHtml}</div>
+            </div>
+            <div class="email-view-pane" id="cv-view-pane">
+                <div class="empty-state">Select a candidate to review CV.</div>
+            </div>
+        </div>`;
+    },
+
+    viewCV: function(id) {
+        const c = State.data.facultySearch.pool.find(x => x.id === id);
+        const pane = document.getElementById('cv-view-pane');
+        
+        // Determine what buttons to show based on status
+        let actionArea = "";
+        
+        if(c.status === 'Applied') {
+            // Phase 1: Shortlist
+            actionArea = `<button class="btn-main" onclick="State.shortlistCandidate(${c.id})">Shortlist for Flyout (-$1,500)</button>`;
+        
+        } else if(c.status === 'Shortlist') {
+            // Phase 2: Negotiation (THIS WAS MISSING BEFORE)
+            actionArea = `
+                <div style="background:#f4f4f4; padding:15px; border:1px solid #ccc; border-radius:4px;">
+                    <h4 style="margin-top:0;">Extend Offer</h4>
+                    <div style="margin-bottom:10px;">
+                        <label>Startup Package Offer ($):</label><br>
+                        <input type="number" id="offer-amt-${c.id}" value="${c.startupAsk}" style="font-size:1.1rem; padding:5px; width:150px;">
+                    </div>
+                    <button class="btn-main" style="background:#27ae60; color:white;" 
+                        onclick="State.makeFacultyOffer(${c.id}, parseInt(document.getElementById('offer-amt-${c.id}').value))">
+                        Send Offer
+                    </button>
+                    <p style="font-size:0.8rem; color:#666; margin-top:5px;">Warning: This amount is deducted immediately.</p>
+                </div>`;
+        
+        } else {
+            // Phase 3: Closed
+            let color = c.status === 'Declined' ? '#c0392b' : '#2c3e50';
+            actionArea = `<button class="btn-main" disabled style="border-color:${color}; color:${color};">${c.status}</button>`;
+        }
+
+        pane.innerHTML = `
+        <div class="dossier-paper" style="margin:20px; height:90%; overflow-y:auto;">
+            <div style="border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:end;">
+                <div>
+                    <h1 style="margin:0; font-family:'Georgia', serif;">${c.name}</h1>
+                    <div style="font-style:italic;">Curriculum Vitae</div>
+                </div>
+                <div style="text-align:right;">
+                    <div><strong>H-Index:</strong> ${c.hIndex}</div>
+                </div>
+            </div>
+
+            <div class="dossier-section">
+                <div class="dossier-label">Education & Training</div>
+                <div style="margin-bottom:5px;"><strong>PhD:</strong> ${c.pedigree.phd}</div>
+                <div style="margin-bottom:5px;"><strong>Postdoc:</strong> ${c.pedigree.postdoc}</div>
+            </div>
+
+            <div class="dossier-section">
+                <div class="dossier-label">Research Statement</div>
+                <p>My work focuses on the intersection of modern synthesis and biological systems. I propose to build a lab that utilizes ${c.startupAsk > 600000 ? "expensive cryo-EM equipment" : "standard synthetic hoods"} to answer fundamental questions.</p>
+            </div>
+
+            <div class="dossier-section">
+                <div class="dossier-label">Startup Demand</div>
+                <div style="font-size:1.5rem; color:#c0392b; font-weight:bold;">$${c.startupAsk.toLocaleString()}</div>
+                <div style="font-size:0.8rem; color:#666;">Includes instrument costs and 2 years of personnel.</div>
+            </div>
+
+            <div style="margin-top:30px;">
+                ${actionArea}
+            </div>
+        </div>`;
+    }
 };

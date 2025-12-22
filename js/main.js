@@ -5,6 +5,9 @@ const Game = {
     SPEEDS: { 0: null, 1: 2000, 2: 1000, 3: 250 },
     viewState: { mode: 'month', year: 2025, month: 7, day: 1 },
     rosterFilters: { rank: 'all', field: 'all', tenure: 'all', sort: 'hIndex' },
+    // Add these two lines to the Game object:
+    emailFilter: 'all',
+    setEmailFilter: function(val) { this.emailFilter = val; UI.renderInbox(State.data.emails); },
     
     // --- UPDATED: ADMISSIONS FILTERS ---
     admissionsFilters: { field: 'all', gpa: 'all', rec: 'all' }, 

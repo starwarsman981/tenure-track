@@ -11,7 +11,8 @@ const State = {
         },
         policy: { overheadRate: 0.50, salaryMod: 1.0, stipendMod: 1.0 },
         finance: { history: [], weeklyLog: [], lastWeekSummary: { net: 0, income: 0, expense: 0 } },
-        admissions: { active: false, setupComplete: false, targetSize: 7, strategy: "standard", pool: [], selectedApplicantId: null }
+        admissions: { active: false, setupComplete: false, targetSize: 7, strategy: "standard", pool: [], selectedApplicantId: null },
+        facultySearch: { active: false, phase: "idle", budget: 0, pool: [], shortlist: [], offer: null },
     },
 
     // --- UPDATED COSTS (Realistic 2025 Numbers) ---
@@ -80,9 +81,37 @@ const State = {
         this.addEmail("Provost", "Fiscal Year Start", `Welcome. Expenses are deducted weekly.`);
     },
 
-    advanceDay: function() {
+  advanceDay: function() {
+        // 1. INCREMENT TIME
         this.data.day++;
         
+        // 2. CALENDAR MATH (Do this BEFORE checking events)
+        if (this.data.day > 30) {
+            this.data.day = 1; 
+            this.data.month++;
+            if(this.data.month > 11) { 
+                this.data.month = 0; 
+                this.data.year++; 
+            }
+        }
+
+        // 3. CHECK EVENTS (Now the date is correct)
+        
+        // --- AUGUST 1st: NEW ACADEMIC YEAR ---
+        if(this.data.month === 7 && this.data.day === 1) {
+            console.log("Aug 1 Triggered"); // Debug confirmation
+            this.processTuitionDrop(); 
+            
+            // Run the rollover if we are past the start year (2025)
+            if(this.data.year > 2025) { 
+                 this.processAcademicYearRollover(); 
+            }
+        }
+        
+        // Jan 15 Tuition
+        if(this.data.month === 0 && this.data.day === 15) this.processTuitionDrop();
+
+        // Weekly Events
         if(this.data.day % 7 === 0) {
             this.processWeeklyFinances();
             this.processGrantCycle();
@@ -91,21 +120,38 @@ const State = {
             this.updateCitations();
         }
 
+        // Daily Research
         this.processResearchOutput();
 
-        if(this.data.month === 8 && this.data.day === 1) this.processTuitionDrop();
-        if(this.data.month === 0 && this.data.day === 15) this.processTuitionDrop();
-
+        // --- SPECIFIC DATES ---
+        
+        // Aug 15: Admissions Targets
         if(this.data.month === 7 && this.data.day === 15 && !this.data.admissions.setupComplete) {
             this.calculateAndNotifyCohortTarget();
         }
         
-        const isSeason = (this.data.month === 11 || this.data.month === 0 || this.data.month === 1 || this.data.month === 2);
+        // Aug 20: Faculty Search Authorization
+        if(this.data.month === 7 && this.data.day === 20 && !this.data.facultySearch.active) {
+            this.addEmail("Dean", "Authorization for Faculty Search", 
+                `You have permission to open <strong>1 Tenure-Track Position</strong> this year.<br>
+                Do you want to run a search?<br><br>
+                <button class='btn-main' onclick='State.startFacultySearch()'>Yes, Open Search</button>
+                <button class='btn-small' onclick='State.skipFacultySearch()'>No, save money</button>`);
+        }
+
+        // Oct 1: Faculty Search Candidates
+        if(this.data.month === 9 && this.data.day === 1 && this.data.facultySearch.active && this.data.facultySearch.phase === 'ads') {
+            this.generateFacultyCandidates();
+        }
+        
+        // Admissions Season (Nov-March)
+        const isSeason = (this.data.month === 10 || this.data.month === 11 || this.data.month === 0 || this.data.month === 1 || this.data.month === 2);
         if (isSeason && !this.data.admissions.active) {
             if(!this.data.admissions.setupComplete) this.setRecruitmentStrategy(7, "standard");
             this.startAdmissionsSeason();
         }
 
+        // March 1: Visit Weekend
         if(this.data.month === 2 && this.data.day === 1) {
             this.createInteractiveEmailEvent({
                 title: "Visit Weekend",
@@ -117,13 +163,9 @@ const State = {
             }, "Admissions Cmte");
         }
 
+        // Decisions
         if((this.data.month === 2 && this.data.day >= 15) || (this.data.month === 3 && this.data.day < 15)) this.processGradualDecisions();
         if(this.data.month === 3 && this.data.day === 15) this.processDecisionDay();
-
-        if (this.data.day > 30) {
-            this.data.day = 1; this.data.month++;
-            if(this.data.month > 11) { this.data.month = 0; this.data.year++; }
-        }
     },
 
     calculateAndNotifyCohortTarget: function() {
@@ -134,8 +176,8 @@ const State = {
         const low = Math.max(1, estimatedCapacity - 2);
         const high = estimatedCapacity + 2;
         
-        this.addEmail("Grad Admissions Cmte", "ACTION REQUIRED: Set Cohort Size", 
-            `We have analyzed the department's lab capacity.<br><br>
+        this.addEmail("Graduate Admissions Committee ", "ACTION REQUIRED: Set Cohort Size", 
+            `We have analyzed the department's lab capacity based on faculty and department funding. Here is our recommmendation for the number of students we should attempt to bring in for next year.<br><br>
             <strong>Active Research Labs:</strong> ${activeLabs}<br>
             <strong>Recommended Cohort:</strong> ${low} - ${high} students<br><br>
             <button class="btn-main" onclick="UI.showRecruitmentSetupModal()">Configure Recruitment</button>`);
@@ -615,7 +657,170 @@ processGrantCycle: function() {
             UI.renderInbox(this.data.emails); 
         }
     },
+    startFacultySearch: function() {
+        this.data.facultySearch.active = true;
+        this.data.facultySearch.phase = "ads";
+        this.data.budget -= 5000;
+        this.addEmail("Search Cmte", "Job Ad Posted", "We have posted the ad in Science and Nature Jobs. Applications will arrive in October. (-$5,000)");
+        // Trigger pool generation later
+        this.data.pendingEvent = { title: "Search Active", desc: "Ads are running.", choices: [{text:"OK", cost:0, flavor:"Good", effect:"none"}]};
+    },
     
+    skipFacultySearch: function() {
+        this.addEmail("Dean", "Acknowledged", "We will save the line for next year.");
+    },
+
+    generateFacultyCandidates: function() {
+        // You can call this manually in console for testing: State.generateFacultyCandidates()
+        const count = 10 + Math.floor(Math.random() * 5);
+        const pool = [];
+        
+        for(let i=0; i<count; i++) {
+            const tierRoll = Math.random();
+            let tier = 4;
+            if(tierRoll > 0.9) tier = 1; else if(tierRoll > 0.7) tier = 2; else if(tierRoll > 0.4) tier = 3;
+
+            const school = FACULTY_SEARCH.TIERS[tier].schools[Math.floor(Math.random() * FACULTY_SEARCH.TIERS[tier].schools.length)];
+            const postdocLab = FACULTY_SEARCH.LABS[Math.floor(Math.random() * FACULTY_SEARCH.LABS.length)];
+            const hIndex = Math.floor((5 - tier) * 3 + (Math.random() * 5)); 
+            const baseStartup = 400000 + ((5-tier) * 100000) + (Math.random() * 200000);
+
+            pool.push({
+                id: Date.now() + i,
+                name: ApplicantGenerator.generateName(false),
+                pedigree: { phd: school, tier: tier, postdoc: postdocLab },
+                stats: { research: Math.random()*100, teaching: Math.random()*100 },
+                hIndex: hIndex,
+                startupAsk: Math.floor(baseStartup),
+                status: "Applied"
+            });
+        }
+        this.data.facultySearch.pool = pool;
+        this.data.facultySearch.phase = "longlist";
+        this.addEmail("Search Chair", "Candidates Ready", "The application portal is closed. Please review the CVs in the <strong>Faculty Search</strong> tab.");
+    },
+
+    shortlistCandidate: function(id) {
+        const c = this.data.facultySearch.pool.find(x => x.id === id);
+        if(this.data.facultySearch.shortlist.length >= 3) { alert("You can only fly out 3 candidates."); return; }
+        if(this.data.budget < 1500) { alert("Not enough budget for flyout."); return; }
+        
+        c.status = "Shortlist";
+        this.data.facultySearch.shortlist.push(c);
+        this.data.budget -= 1500;
+        this.addEmail("Travel", "Flyout Booked", `Flight booked for ${c.name}. (-$1,500)`);
+        if(typeof UI !== 'undefined') UI.renderFacultySearch(this.data);
+    },
+    makeFacultyOffer: function(id, offerAmount) {
+        const c = this.data.facultySearch.pool.find(x => x.id === id);
+        if(!c) return;
+
+        // 1. Calculate Success Chance
+        // If you match their ask, you get a 90% chance.
+        // If you lowball by $50k, it drops to 50%.
+        const gap = offerAmount - c.startupAsk;
+        let chance = 0.5;
+        if(gap >= 0) chance = 0.95; 
+        else if(gap > -25000) chance = 0.75;
+        else if(gap > -50000) chance = 0.50;
+        else chance = 0.05; // Insulting offer
+
+        if(Math.random() < chance) {
+            // SUCCESS!
+            this.addEmail(c.name, "Offer Accepted!", `I am thrilled to accept your offer. The startup package of $${offerAmount.toLocaleString()} will be sufficient to launch my lab.`);
+            
+            // Deduct the massive startup cost
+            this.data.budget -= offerAmount;
+            
+            // Create the new Professor object
+            const newProf = FacultyGenerator.generate("Assistant", "Physical"); 
+            newProf.name = "Dr. " + c.name.split(' ')[1]; // Keep their last name
+            newProf.funds = offerAmount; // They keep the money as reserves
+            newProf.runway = "2.0 yrs"; // Startup covers ~2 years
+            newProf.happiness = 100;
+            
+            this.data.faculty.push(newProf);
+            
+            // Close the search
+            this.data.facultySearch.active = false;
+            this.data.facultySearch.phase = "complete";
+            this.data.facultySearch.pool = []; 
+        } else {
+            // REJECTION
+            this.addEmail(c.name, "Offer Declined", `Thank you for the offer, but the startup package ($${offerAmount.toLocaleString()}) is significantly below what I need ($${c.startupAsk.toLocaleString()}) to be competitive.`);
+            c.status = "Declined";
+        }
+        
+        // Refresh UI
+        if(typeof UI !== 'undefined') UI.renderFacultySearch(this.data);
+    },
+    processAcademicYearRollover: function() {
+        const log = [];
+        let prestigeGain = 0;
+
+        // 1. GRADUATION (G5 -> Graduate)
+        const graduating = this.data.students.filter(s => s.year >= 5);
+        graduating.forEach(g => {
+            // Remove student from their advisor's list
+            const advisor = this.data.faculty.find(f => f.id === g.advisorId);
+            if(advisor) {
+                advisor.students = advisor.students.filter(id => id !== g.id);
+            }
+            prestigeGain += 5; 
+        });
+        
+        // Remove graduates from the game
+        this.data.students = this.data.students.filter(s => s.year < 5);
+        this.data.prestige += prestigeGain;
+        if(graduating.length > 0) log.push(`🎓 Graduated: ${graduating.length} PhDs (+${prestigeGain} Prestige)`);
+
+        // 2. PROMOTION (G1-G4 -> G2-G5)
+        this.data.students.forEach(s => {
+            s.year++;
+            s.name = s.name.replace(/\(G\d\)/, `(G${s.year})`);
+        });
+        if(this.data.students.length > 0) log.push(`📈 Promoted: ${this.data.students.length} students`);
+
+        // 3. INTAKE (Accepted Applicants -> G1)
+        const newCohort = this.data.admissions.pool.filter(a => a.status === 'Accepted');
+        
+        if(newCohort.length > 0) {
+            newCohort.forEach(a => {
+                // Auto-assign to a matched faculty or random
+                let assignedFac = null;
+                if (a.matches && a.matches.length > 0) {
+                    assignedFac = this.data.faculty.find(f => f.name.includes(a.matches[0].name.split(' ')[1]));
+                }
+                if (!assignedFac) assignedFac = this.data.faculty[Math.floor(Math.random() * this.data.faculty.length)];
+
+                const newStudent = {
+                    id: Date.now() + Math.random(),
+                    name: `${a.name} (G1)`,
+                    year: 1,
+                    advisorId: assignedFac.id,
+                    funding: a.application.hasFellowship ? "Fellowship" : "TA",
+                    stats: a.stats,
+                    pubs: 0
+                };
+                
+                this.data.students.push(newStudent);
+                assignedFac.students.push(newStudent.id);
+            });
+            log.push(`✨ New Cohort: ${newCohort.length} G1s joined.`);
+        } else {
+            log.push(`<span style="color:red">Warning: No new students joined this year.</span>`);
+        }
+
+        // 4. RESET ADMISSIONS
+        this.data.admissions.pool = [];
+        this.data.admissions.active = false;
+        this.data.admissions.setupComplete = false;
+        
+        // 5. NOTIFY
+        const summary = log.length > 0 ? log.join('<br>') : "No significant changes.";
+        this.addEmail("Dean", `Academic Year ${this.data.year}-${this.data.year+1}`, 
+            `<div style="padding:15px; background:#f9f9f9; border:1px solid #ddd;"><h3>Annual Report</h3>${summary}</div>`, "urgent");
+    },
     saveGame: function() { localStorage.setItem('tenureTrackSave', JSON.stringify(this.data)); alert("Game Saved!"); },
     loadGame: function(input) { const load = (json) => { this.data = JSON.parse(json); UI.toggleGameView(true); UI.updateTopBar(this.data); Game.navigate('office'); }; if(input && input.files[0]) { const r = new FileReader(); r.onload = (e) => load(e.target.result); r.readAsText(input.files[0]); } else if (localStorage.getItem('tenureTrackSave')) load(localStorage.getItem('tenureTrackSave')); }
 };

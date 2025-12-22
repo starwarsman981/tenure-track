@@ -126,6 +126,19 @@ const ADMISSIONS = {
     },
     FLYOUT_COST: 500, FLYOUT_BONUS: 15
 };
-
+const FACULTY_SEARCH = {
+    TIERS: {
+        1: { label: "Elite", schools: ["MIT", "Caltech", "Stanford", "Berkeley", "Harvard", "Cambridge"] },
+        2: { label: "Prestigious", schools: ["Columbia", "UChicago", "Princeton", "Yale", "Oxford", "ETH Zurich"] },
+        3: { label: "Strong", schools: ["UCLA", "Michigan", "UNC Chapel Hill", "Texas", "Wisconsin", "UIUC"] },
+        4: { label: "Regional", schools: ["State U", "Tech Institute", "Liberal Arts College"] }
+    },
+    LABS: ["The Evans Group", "MacMillan Lab", "Bertozzi Group", "Doudna Lab", "Grubbs Group", "Unknown Lab"],
+    STARTUP_COSTS: {
+        "Assistant": { min: 400000, max: 900000 },
+        "Associate": { min: 800000, max: 1500000 },
+        "Full": { min: 1500000, max: 3000000 }
+    }
+};
 // Date-specific events
 const EVENTS_DB = [];
