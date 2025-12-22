@@ -376,7 +376,7 @@ processWeeklyFinances: function() {
         this.recalcFacultyFinances(f);
     });
 
-    const incState = 25000; 
+    const incState = 65000; 
     const totalIncome = incState + overheadGenerated;
     const totalExpense = expFaculty + expResearch + this.COSTS.STAFF_WEEKLY + this.COSTS.FACILITY_WEEKLY;
     const net = totalIncome - totalExpense;
@@ -595,37 +595,26 @@ processGrantCycle: function() {
     
     rejectCandidate: function(appId) { const app = this.data.admissions.pool.find(a => a.id === appId); if(app) app.status = "Rejected"; },
     
-    /* Inside state.js -> Replace addEmail function */
+    addEmail: function(sender, subject, body, category='normal') { 
+        this.data.emails.unshift({ id: Date.now() + Math.random(), date: `${this.data.month+1}/${this.data.day}`, sender: sender, subject: subject, body: body, read: false }); 
+        
+        let shouldPause = false;
+        const s = this.data.settings || { pauseOnEmail: true, pauseOnPaper: false };
 
-addEmail: function(sender, subject, body, category='normal') { 
-    // CHANGE: We now include 'category: category' in the object
-    this.data.emails.unshift({ 
-        id: Date.now() + Math.random(), 
-        date: `${this.data.month+1}/${this.data.day}`, 
-        sender: sender, 
-        subject: subject, 
-        body: body, 
-        read: false,
-        category: category // <--- CRITICAL NEW FIELD
-    }); 
-    
-    let shouldPause = false;
-    const s = this.data.settings || { pauseOnEmail: true, pauseOnPaper: false };
+        if (category === 'urgent') shouldPause = true; 
+        else if (category === 'paper' && s.pauseOnPaper) shouldPause = true;
+        else if (category === 'notification') shouldPause = false;
+        else if (category === 'normal' && s.pauseOnEmail) shouldPause = true;
 
-    if (category === 'urgent') shouldPause = true; 
-    else if (category === 'paper' && s.pauseOnPaper) shouldPause = true;
-    else if (category === 'notification') shouldPause = false;
-    else if (category === 'normal' && s.pauseOnEmail) shouldPause = true;
+        if (shouldPause && typeof Game !== 'undefined') {
+             Game.setSpeed(0);
+             if(typeof UI !== 'undefined') UI.notifyNewEmail(sender, subject);
+        }
 
-    if (shouldPause && typeof Game !== 'undefined') {
-            Game.setSpeed(0);
-            if(typeof UI !== 'undefined') UI.notifyNewEmail(sender, subject);
-    }
-
-    if(typeof UI !== 'undefined' && document.getElementById('screen-office') && !document.getElementById('screen-office').classList.contains('hidden')) { 
-        UI.renderInbox(this.data.emails); 
-    }
-},
+        if(typeof UI !== 'undefined' && document.getElementById('screen-office') && !document.getElementById('screen-office').classList.contains('hidden')) { 
+            UI.renderInbox(this.data.emails); 
+        }
+    },
     
     saveGame: function() { localStorage.setItem('tenureTrackSave', JSON.stringify(this.data)); alert("Game Saved!"); },
     loadGame: function(input) { const load = (json) => { this.data = JSON.parse(json); UI.toggleGameView(true); UI.updateTopBar(this.data); Game.navigate('office'); }; if(input && input.files[0]) { const r = new FileReader(); r.onload = (e) => load(e.target.result); r.readAsText(input.files[0]); } else if (localStorage.getItem('tenureTrackSave')) load(localStorage.getItem('tenureTrackSave')); }
@@ -640,37 +629,64 @@ const FinanceSystem = {
         const pol = data.policy;
         const costs = State.COSTS;
 
+        // 1. Calculate Weekly Burn/Profit based on CURRENT sliders
+        // Income
         const stateIncome = 65000; 
-        // Overhead is now 0 in the projection because it is random/event-based
-        let overheadIncome = 0; 
+        let overheadIncome = 0;
         
+        // Expenses
         let facultyCost = 0;
         let studentCost = 0;
         const fixedCost = costs.STAFF_WEEKLY + costs.FACILITY_WEEKLY;
 
+        // Calculate Faculty Salaries (Heavy impact from Slider)
         data.faculty.forEach(f => {
             facultyCost += (f.salary * pol.salaryMod) / 52;
         });
 
+        // Calculate Student Costs
         data.students.forEach(s => {
+            // Supply cost (always paid by someone)
+            const supplies = costs.SUPPLIES_WEEKLY; 
+            // Stipend cost (affected by Slider)
             const stipend = costs.RA_WEEKLY * pol.stipendMod; 
-            if (s.funding === "TA") studentCost += stipend;
+
+            if (s.funding === "RA") {
+                // RA: Grant pays Stipend + Supplies. 
+                // Dept gets Overhead on that total.
+                // Higher Stipend = Higher Overhead for you (Good!)
+                overheadIncome += (stipend + supplies) * pol.overheadRate;
+            } else if (s.funding === "TA") {
+                // TA: Dept pays Stipend.
+                // Higher Stipend = Higher Expense for you (Bad!)
+                studentCost += stipend;
+            }
         });
 
         const weeklyNet = (stateIncome + overheadIncome) - (facultyCost + studentCost + fixedCost);
 
+        // 2. Simulate Forward (Projecting the line)
         let simBudget = data.budget;
         const projection = [simBudget];
         let simDay = data.day;
         let simMonth = data.month;
         let simYear = data.year;
 
+        // Look ahead 52 weeks
         for(let w=0; w<52; w++) {
-            simBudget += weeklyNet;
+            simBudget += weeklyNet; // Apply the calculated burn rate
+            
             simDay += 7;
-            if(simDay > 30) { simDay = 1; simMonth++; if(simMonth > 11) { simMonth = 0; simYear++; } }
-            if(simMonth === 0 && simDay < 8) simBudget += 150000; 
-            if(simMonth === 7 && simDay < 8) simBudget += 150000; 
+            if(simDay > 30) {
+                simDay = 1; 
+                simMonth++;
+                if(simMonth > 11) { simMonth = 0; simYear++; }
+            }
+
+            // Tuition Injections (Big jumps)
+            if(simMonth === 0 && simDay < 8) simBudget += 150000; // Jan
+            if(simMonth === 7 && simDay < 8) simBudget += 150000; // Aug
+
             projection.push(simBudget);
         }
 

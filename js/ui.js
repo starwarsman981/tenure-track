@@ -1,7 +1,7 @@
 ﻿/* js/ui.js */
 /* js/ui.js */
 const UI = {
-    currentEmailFilter: 'all',
+    
     elements: {
         menu: document.getElementById('main-menu'),
         setup: document.getElementById('setup-screen'),
@@ -854,97 +854,51 @@ renderRecords: function(data) {
         overlay.innerHTML = `<div class="dossier-paper" style="max-width:500px;"><h2 style="margin-top:0; border-bottom:2px solid #333; padding-bottom:10px;">${event.title}</h2><p style="font-size:1.1rem; line-height:1.5; color:#444; margin-bottom:20px;">${event.desc}</p><div style="background:#f4f4f4; padding:20px; border:1px solid #ddd;">${choiceHtml}</div></div>`; document.body.appendChild(overlay);
     },
 
-    /* Inside ui.js -> Replace renderInbox function */
-
-/* Inside js/ui.js -> Replace renderInbox */
-
-/* Inside js/ui.js -> Replace the entire renderInbox function */
-
-renderInbox: function(emails) {
-    const listContainer = document.getElementById('email-list');
-    if(!listContainer) return;
-
-    // 1. Filter Logic
-    const filter = this.currentEmailFilter || 'all';
-    
-    const filteredEmails = emails.filter(e => {
-        const cat = e.category || 'normal'; 
-        const sub = e.subject.toLowerCase();
-        const sen = e.sender.toLowerCase();
-
-        if (filter === 'all') return true;
+    renderInbox: function(emails) { 
+        const container = this.elements.screens.office; 
         
-        // Urgent / Dilemmas
-        if (filter === 'urgent') return cat === 'urgent';
+        if (!container.querySelector('.outlook-layout')) { 
+            container.innerHTML = `
+                <div class="outlook-layout">
+                    <div class="email-list-pane">
+                        <div class="outlook-header">
+                            <span>Inbox</span><span id="unread-count"></span>
+                        </div>
+                        <div class="email-list-scroll" id="email-list-container"></div>
+                    </div>
+                    <div class="email-view-pane">
+                        <div id="email-reading-view" class="hidden">
+                            <div class="email-view-header">
+                                <div class="view-subject" id="view-subject"></div>
+                                <div id="view-from" style="font-weight:bold; color:#2c3e50;"></div>
+                                <div id="view-date" style="font-size:0.8rem; color:#888;"></div>
+                            </div>
+                            <div class="view-body" id="view-body"></div>
+                        </div>
+                        <div id="email-empty-view" class="empty-state">Select an email to read.</div>
+                    </div>
+                </div>`; 
+        } 
         
-        // Research Papers
-        if (filter === 'paper') return cat === 'paper';
+        const listContainer = document.getElementById('email-list-container'); 
+        listContainer.innerHTML = ''; 
         
-        // Grants (Money)
-        if (filter === 'grant') {
-            return sen.includes('osp') || sub.includes('grant') || sub.includes('award');
-        }
+        let unread = 0; 
+        emails.forEach(email => { 
+            if(!email.read) unread++; 
+            const item = document.createElement('div'); 
+            item.className = `email-item ${email.read ? 'read' : 'unread'}`; 
+            item.onclick = () => UI.openEmail(email.id); 
+            item.innerHTML = `
+                <div class="email-sender">${email.sender}</div>
+                <div class="email-subject">${email.subject}</div>
+                <div class="email-date">${email.date}</div>`; 
+            listContainer.appendChild(item); 
+        }); 
         
-        // Admissions (Students)
-        if (filter === 'admissions') {
-            // FIX: Explicitly ignore papers so "Pub Accepted" doesn't trigger this
-            if (cat === 'paper') return false;
-            
-            return sen.includes('admission') || sub.includes('application') || sub.includes('accept') || sub.includes('decline');
-        }
-        
-        // General (Everything else)
-        if (filter === 'normal') {
-            const isSpecial = cat === 'urgent' || cat === 'paper' || sen.includes('osp') || sub.includes('grant') || sen.includes('admission');
-            return !isSpecial;
-        }
-        return true;
-    });
-
-    // 2. Build Filter Dropdown
-    const filters = [
-        { id: 'all', label: '📂 All Emails' },
-        { id: 'urgent', label: '⚠️ Dilemmas / Urgent' },
-        { id: 'grant', label: '💰 Grant Notifications' },
-        { id: 'paper', label: '📄 Research Papers' },
-        { id: 'admissions', label: '🎓 Admissions' },
-        { id: 'normal', label: '✉️ General Inbox' }
-    ];
-
-    let filterHtml = `
-    <div style="padding:10px; border-bottom:1px solid #ddd; background:#f4f4f4;">
-        <select onchange="UI.setInboxFilter(this.value)" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:0.9rem; color:#2c3e50;">
-            ${filters.map(f => `<option value="${f.id}" ${filter === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}
-        </select>
-    </div>
-    `;
-
-    // 3. Build Email List HTML
-    const listHtml = filteredEmails.map(email => {
-        let icon = "";
-        // Minimal icons since the dropdown explains the categories
-        if(email.category === 'paper') icon = "📄 ";
-        if(email.category === 'urgent') icon = "⚠️ ";
-        if(email.sender === 'OSP') icon = "💰 ";
-        
-        const readClass = email.read ? 'read' : 'active';
-        return `
-        <div class="email-item ${readClass}" onclick="UI.openEmail(${email.id})">
-            <div class="email-sender">${icon}${email.sender}</div>
-            <div class="email-subject">${email.subject}</div>
-            <div class="email-date">${email.date}</div>
-        </div>`;
-    }).join('');
-
-    // 4. Render
-    listContainer.innerHTML = filterHtml + (listHtml || `<div style="padding:40px 20px; text-align:center; color:#999; font-style:italic;">No emails in this folder.</div>`);
-},
-
-// ADD THIS NEW HELPER FUNCTION RIGHT AFTER renderInbox:
-setInboxFilter: function(filterKey) {
-    this.currentEmailFilter = filterKey;
-    this.renderInbox(State.data.emails);
-},
+        const countSpan = document.getElementById('unread-count');
+        if(countSpan) countSpan.innerText = unread > 0 ? `${unread} Unread` : ''; 
+    },
 
     openEmail: function(id) { 
         const email = State.data.emails.find(e => e.id === id); 
