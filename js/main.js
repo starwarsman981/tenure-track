@@ -125,6 +125,8 @@ const Game = {
         if(screenId === 'calendar') UI.renderCalendar(State.data, this.viewState);
         if(screenId === 'faculty') UI.renderFaculty(State.data.faculty, this.rosterFilters);
         if(screenId === 'finance') UI.renderFinance(State.data, this.financeTab);
+        if(screenId === 'students') UI.renderStudents(State.data);
+        if(screenId === 'records') UI.renderRecords(State.data);
         if(screenId === 'admissions') UI.renderAdmissions(State.data);
     },
 

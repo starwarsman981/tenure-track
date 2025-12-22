@@ -63,6 +63,8 @@
 			<div id="nav-calendar" class="nav-item" onclick="Game.navigate('calendar')">Calendar</div>
 			<div id="nav-faculty" class="nav-item" onclick="Game.navigate('faculty')">Faculty Roster</div>
 			<div id="nav-finance" class="nav-item" onclick="Game.navigate('finance')">Finance</div>
+			<div id="nav-students" class="nav-item" onclick="Game.navigate('students')">Grad Students</div>
+			<div id="nav-records" class="nav-item" onclick="Game.navigate('records')">Records</div>
 			<div id="nav-admissions" class="nav-item" onclick="Game.navigate('admissions')">Admissions</div>
 
 			<div class="sidebar-footer">
@@ -91,10 +93,39 @@
 			</div>
 
 			<div id="viewport">
-				<div id="screen-office" class="screen"></div>
+				<div id="screen-office" class="screen">
+    <div style="display:flex; height:100%; border:1px solid #ccc; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        
+        <div id="email-list-pane" style="width:350px; min-width:300px; border-right:1px solid #ddd; display:flex; flex-direction:column; background:white;">
+            <div id="email-list" style="flex:1; overflow-y:auto;"></div> 
+        </div>
+
+        <div id="email-reading-pane" style="flex:1; background:#f8f9fa; position:relative; overflow-y:auto;">
+            
+            <div id="email-empty-view" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#999; text-align:center;">
+                <div style="font-size:3rem; margin-bottom:10px;">✉️</div>
+                Select an email to read
+            </div>
+
+            <div id="email-reading-view" class="hidden" style="padding:30px;">
+                <div id="view-subject" style="font-size:1.4rem; font-family:'Georgia', serif; font-weight:bold; color:#2c3e50; margin-bottom:5px;"></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:15px;">
+                    <div id="view-from" style="font-weight:bold; color:#555;"></div>
+                    <div id="view-date" style="color:#888; font-size:0.9rem;"></div>
+                </div>
+                <div id="view-body" style="font-size:1rem; line-height:1.6; color:#333;"></div>
+                
+                <div id="email-actions" style="margin-top:30px;"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
 				<div id="screen-calendar" class="screen hidden"></div>
 				<div id="screen-faculty" class="screen hidden"></div>
 				<div id="screen-finance" class="screen hidden"></div>
+				<div id="screen-students" class="screen hidden"></div>
+				<div id="screen-records" class="screen hidden"></div>
 				<div id="screen-admissions" class="screen hidden"></div>
 			</div>
 		</div>

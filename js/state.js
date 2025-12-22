@@ -14,15 +14,31 @@ const State = {
         admissions: { active: false, setupComplete: false, targetSize: 7, strategy: "standard", pool: [], selectedApplicantId: null }
     },
 
+    // --- UPDATED COSTS (Realistic 2025 Numbers) ---
     COSTS: {
-        RA_WEEKLY: 1250, TA_WEEKLY: 850, FELLOW_WEEKLY: 100,
-        LAB_BASE: 250, SUPPLIES_WEEKLY: 150, STAFF_WEEKLY: 2500, FACILITY_WEEKLY: 1500
+        // RAs cost Grants; TAs cost the Department Budget.
+        RA_WEEKLY: 655, 
+        TA_WEEKLY: 655, 
+        
+        // Fellowship Top-up (Bonus to attract students)
+        FELLOW_WEEKLY: 100,
+
+        // Lab Operations (Chemicals, etc per student)
+        SUPPLIES_WEEKLY: 300, 
+        
+        // Base cost to keep the lights on per lab
+        LAB_BASE: 500, 
+        
+        // Departmental Overhead
+        STAFF_WEEKLY: 3500, 
+        FACILITY_WEEKLY: 2000 
     },
 
     initNewGame: function(name, typeKey, discKey) {
         this.data.year = 2025; this.data.month = 7; this.data.day = 1;
         this.data.deptName = name; this.data.type = typeKey; this.data.discipline = discKey;
         this.data.students = []; this.data.admissions.active = false; this.data.admissions.pool = [];
+        this.data.publications = [];
         this.data.policy = { overheadRate: 0.50, salaryMod: 1.0, stipendMod: 1.0 };
         this.data.emails = [];
         this.data.settings = { pauseOnEmail: true, pauseOnPaper: false };
@@ -72,6 +88,7 @@ const State = {
             this.processGrantCycle();
             this.processMorale();
             this.processRandomEvents();
+            this.updateCitations();
         }
 
         this.processResearchOutput();
@@ -178,19 +195,21 @@ const State = {
     },
 
     triggerDiscovery: function(prof) {
+        // Generate Title
         const adj = RESEARCH_DB.ADJECTIVES[Math.floor(Math.random() * RESEARCH_DB.ADJECTIVES.length)];
         const method = RESEARCH_DB.METHODS[Math.floor(Math.random() * RESEARCH_DB.METHODS.length)];
         const target = RESEARCH_DB.TARGETS[Math.floor(Math.random() * RESEARCH_DB.TARGETS.length)];
         const app = RESEARCH_DB.APPLICATIONS[Math.floor(Math.random() * RESEARCH_DB.APPLICATIONS.length)];
         const title = `A ${adj} ${method} of ${target} for ${app}`;
         
+        // NEW 1-10 Scale Logic
         const journals = [
-            { name: "Nature", impact: 50 },
-            { name: "Science", impact: 45 },
-            { name: "JACS", impact: 15 },
-            { name: "Angewandte", impact: 14 },
-            { name: "Chem. Sci.", impact: 9 },
-            { name: "Tetrahedron", impact: 2 }
+            { name: "Nature", impact: 9.9 },
+            { name: "Science", impact: 9.5 },
+            { name: "JACS", impact: 6.5 },
+            { name: "Angewandte", impact: 6.0 },
+            { name: "Chem. Sci.", impact: 3.5 },
+            { name: "Tetrahedron", impact: 1.2 }
         ];
         
         const roll = (prof.hIndex / 3) + (Math.random() * 20); 
@@ -201,6 +220,7 @@ const State = {
         else if(roll > 20) journal = journals[3];
         else if(roll > 10) journal = journals[4];
 
+        // Give credit to students
         const myStudents = this.data.students.filter(s => s.advisorId === prof.id);
         let firstAuthor = "Postdoc J. Doe";
         let coAuthors = "";
@@ -208,22 +228,42 @@ const State = {
         if (myStudents.length > 0) {
             myStudents.sort((a,b) => b.stats.hands - a.stats.hands);
             firstAuthor = myStudents[0].name;
+            myStudents[0].pubs = (myStudents[0].pubs || 0) + 1; // Increment student paper count
             if(myStudents.length > 1) {
                 coAuthors = ", " + myStudents.slice(1, Math.min(4, myStudents.length)).map(s => s.name.split(' ')[1]).join(', ');
             }
         }
 
-        prof.hIndex += Math.ceil(journal.impact / 5); 
-        this.data.prestige += Math.ceil(journal.impact / 10);
+        // Apply Rewards
+        prof.hIndex += Math.ceil(journal.impact); 
+        this.data.prestige += Math.ceil(journal.impact / 2);
 
+        // Calculate Citations & Save Record
+        const citations = Math.floor(journal.impact * (5 + Math.random() * 20));
+        
+        // Ensure the list exists before pushing (safety check)
+        if(!this.data.publications) this.data.publications = [];
+
+       this.data.publications.push({
+         title: title,
+         journal: journal.name,
+          impact: journal.impact,
+           citations: 0,              // Start at 0
+           age: 0,                    // New paper (0 weeks old)
+           author: prof.name,
+          authorHIndex: prof.hIndex, // Capture author fame at time of publishing
+          year: this.data.year
+        });
+
+        // Email Notification Logic
         let comment = "";
         let color = "#7f8c8d";
-        if (journal.impact > 40) {
+        if (journal.impact > 9) {
             comment = "This is career-defining work. The press office needs to run a story on this.";
-            color = "#8e44ad";
-        } else if (journal.impact > 10) {
+            color = "#8e44ad"; 
+        } else if (journal.impact > 6) {
             comment = "Solid work. The students really ground this one out over the holidays.";
-            color = "#2980b9";
+            color = "#2980b9"; 
         } else {
             comment = "It's a small contribution, but good for the first-year students to get their names on a paper.";
             color = "#7f8c8d";
@@ -235,7 +275,7 @@ const State = {
                 <div style="font-style:italic; margin-bottom:5px;">"${title}"</div>
                 <div style="font-size:0.9rem;">
                     <strong>Authors:</strong> ${firstAuthor}${coAuthors}, ${prof.name}*<br>
-                    <strong>Projected Impact:</strong> ${journal.impact.toFixed(1)}
+                    <strong>Impact Factor:</strong> ${journal.impact.toFixed(1)} / 10
                 </div>
             </div>
             <p>"${comment}"</p>
@@ -245,51 +285,117 @@ const State = {
         this.addEmail(prof.name, `Pub Accepted: ${journal.name}`, body, 'paper');
     },
 
+    /* Paste this AFTER triggerDiscovery, inside the State object */
+
+    updateCitations: function() {
+        if (!this.data.publications) return;
+
+        this.data.publications.forEach(pub => {
+            pub.age++; // Increment age in weeks
+
+            // 1. Ramp-Up Factor (Accelerates over first 8 weeks)
+            // Starts slow (12%) and reaches 100% speed by week 8
+            const rampUp = Math.min(1, pub.age / 8);
+
+            // 2. Base Velocity (Impact driven)
+            // Low Impact (1.2): ~0.14 cites/week
+            // High Impact (9.9): ~9.8 cites/week
+            const impactVelocity = (pub.impact * pub.impact) / 10;
+
+            // 3. Prestige Bonus (Author Fame)
+            // Adds a small flat bonus based on how famous the PI is
+            const prestigeBonus = (pub.authorHIndex || 10) / 50;
+
+            // Calculate Potential Citations this week
+            const potential = (impactVelocity + prestigeBonus) * rampUp;
+            
+            // Apply Randomness (Handle decimals)
+            // e.g., 0.4 potential = 40% chance of 1 citation
+            const base = Math.floor(potential);
+            const chance = potential - base;
+            
+            let gained = base;
+            if(Math.random() < chance) gained++;
+            
+            // Random "Viral" Spike (1% chance for a burst)
+            if(Math.random() < 0.01) {
+                gained += Math.floor(Math.random() * 5 * pub.impact);
+            }
+
+            pub.citations += gained;
+        });
+    },
     modifyMorale: function(amount) { this.data.faculty.forEach(f => f.happiness = Math.max(0, Math.min(100, f.happiness + amount))); },
 
-    processWeeklyFinances: function() {
-        const pol = this.data.policy;
-        let expFaculty = 0; let expResearch = 0; let overheadGenerated = 0;
-        this.data.faculty.forEach(f => {
-            expFaculty += (f.salary * pol.salaryMod) / 52;
-            let grantBurnNeeded = this.COSTS.LAB_BASE; 
-            const myStudents = this.data.students.filter(s => s.advisorId === f.id);
-            myStudents.forEach(s => {
-                if(s.funding === "RA") grantBurnNeeded += (this.COSTS.RA_WEEKLY * pol.stipendMod) + this.COSTS.SUPPLIES_WEEKLY;
-                else if (s.funding === "TA") { expResearch += (this.COSTS.TA_WEEKLY * pol.stipendMod); grantBurnNeeded += this.COSTS.SUPPLIES_WEEKLY; }
-                else if (s.funding === "Fellowship") grantBurnNeeded += this.COSTS.SUPPLIES_WEEKLY; 
-            });
-            let actualGrantBurn = 0;
-            if(f.grants.length > 0) {
-                f.grants.forEach(g => {
-                    if(grantBurnNeeded > 0 && g.remaining > 0) {
-                        const amount = Math.min(grantBurnNeeded, g.remaining);
-                        g.remaining -= amount; grantBurnNeeded -= amount; actualGrantBurn += amount;
-                    }
-                });
-                f.grants = f.grants.filter(g => g.remaining > 0);
-                overheadGenerated += (actualGrantBurn * pol.overheadRate);
-            }
-            this.recalcFacultyFinances(f);
+    /* Inside state.js -> Replace processWeeklyFinances */
+
+processWeeklyFinances: function() {
+    const pol = this.data.policy;
+    let expFaculty = 0; 
+    let expResearch = 0; 
+    
+    // OVERHEAD IS NOW LUMP SUM ONLY.
+    // We keep the variable so the ledger structure doesn't break, but it is 0 weekly.
+    let overheadGenerated = 0; 
+
+    this.data.faculty.forEach(f => {
+        // 1. Faculty Salary
+        expFaculty += (f.salary * pol.salaryMod) / 52;
+
+        // 2. Lab Costs
+        let grantBurnNeeded = this.COSTS.LAB_BASE; 
+        const myStudents = this.data.students.filter(s => s.advisorId === f.id);
+        
+        myStudents.forEach(s => {
+            grantBurnNeeded += this.COSTS.SUPPLIES_WEEKLY;
+
+            if(s.funding === "RA") {
+                // RA: Grant pays Stipend + Supplies.
+                // Overhead is NO LONGER collected here. It was taken upfront.
+                const stipendCost = (this.COSTS.RA_WEEKLY * pol.stipendMod);
+                grantBurnNeeded += stipendCost;
+            } 
+            else if (s.funding === "TA") {
+                // TA: Dept pays Stipend.
+                expResearch += (this.COSTS.TA_WEEKLY * pol.stipendMod);
+            } 
         });
-        const incState = 12000; const totalIncome = incState + overheadGenerated;
-        const totalExpense = expFaculty + expResearch + this.COSTS.STAFF_WEEKLY + this.COSTS.FACILITY_WEEKLY;
-        const net = totalIncome - totalExpense;
-        this.data.budget += net;
-        const summary = { net: net, income: { state: incState, overhead: overheadGenerated, tuition: 0 }, expense: { faculty: expFaculty, staff: this.COSTS.STAFF_WEEKLY, research: expResearch, facility: this.COSTS.FACILITY_WEEKLY } };
-        this.data.finance.lastWeekSummary = summary;
-        this.data.finance.weeklyLog.unshift({ date: `${this.data.month+1}/${this.data.day}`, summary: summary });
-        if(this.data.finance.weeklyLog.length > 50) this.data.finance.weeklyLog.pop();
-        this.data.finance.history.push(this.data.budget);
-    },
+
+        // 3. Deduct from Grants
+        if(f.grants.length > 0) {
+            f.grants.forEach(g => {
+                if(grantBurnNeeded > 0 && g.remaining > 0) {
+                    const amount = Math.min(grantBurnNeeded, g.remaining);
+                    g.remaining -= amount; 
+                    grantBurnNeeded -= amount; 
+                }
+            });
+            f.grants = f.grants.filter(g => g.remaining > 0);
+        }
+        
+        this.recalcFacultyFinances(f);
+    });
+
+    const incState = 25000; 
+    const totalIncome = incState + overheadGenerated;
+    const totalExpense = expFaculty + expResearch + this.COSTS.STAFF_WEEKLY + this.COSTS.FACILITY_WEEKLY;
+    const net = totalIncome - totalExpense;
+    
+    this.data.budget += net;
+    const summary = { net: net, income: { state: incState, overhead: overheadGenerated, tuition: 0 }, expense: { faculty: expFaculty, staff: this.COSTS.STAFF_WEEKLY, research: expResearch, facility: this.COSTS.FACILITY_WEEKLY } };
+    this.data.finance.lastWeekSummary = summary;
+    this.data.finance.weeklyLog.unshift({ date: `${this.data.month+1}/${this.data.day}`, summary: summary });
+    if(this.data.finance.weeklyLog.length > 50) this.data.finance.weeklyLog.pop();
+    this.data.finance.history.push(this.data.budget);
+},
 
     recalcFacultyFinances: function(prof) {
         let weeklyBurn = this.COSTS.LAB_BASE;
         const myStudents = this.data.students.filter(s => s.advisorId === prof.id);
         const pol = this.data.policy; 
         myStudents.forEach(s => {
-            if(s.funding === "RA") weeklyBurn += (this.COSTS.RA_WEEKLY * pol.stipendMod) + this.COSTS.SUPPLIES_WEEKLY;
-            else weeklyBurn += this.COSTS.SUPPLIES_WEEKLY;
+            weeklyBurn += this.COSTS.SUPPLIES_WEEKLY;
+            if(s.funding === "RA") weeklyBurn += (this.COSTS.RA_WEEKLY * pol.stipendMod);
         });
         prof.burnRate = weeklyBurn * 4.3; 
         const totalFunds = prof.grants.reduce((sum, g) => sum + g.remaining, 0);
@@ -324,45 +430,76 @@ const State = {
     },
 
     setPolicy: function(key, value) { 
-        this.data.policy[key] = parseFloat(value); 
-        if(typeof UI !== 'undefined') UI.renderFinance(this.data, "overview"); 
-    },
+    this.data.policy[key] = parseFloat(value); 
+    
+    // Force immediate redraw of the Finance screen to show "Live" projection
+    if(typeof UI !== 'undefined' && document.getElementById('screen-finance')) {
+        UI.renderFinance(this.data, "overview"); 
+    }
+},
+    /* Inside state.js -> Replace processGrantCycle */
 
-    processGrantCycle: function() {
-        this.data.faculty.forEach(f => {
-            const needsMoney = parseFloat(f.runway) < 12 || f.runway === "0.0"; const canApply = f.pendingApps.length < 2; 
-            if (canApply && Math.random() < (needsMoney ? 0.08 : 0.01)) { const agency = ["NSF", "NIH", "DOE", "DOD"][Math.floor(Math.random()*4)]; f.pendingApps.push({ agency: agency, amount: 350000 + Math.floor(Math.random()*400000), weeksPending: 0, weeksToDecision: 10 + Math.floor(Math.random()*10) }); }
-            for (let i = f.pendingApps.length - 1; i >= 0; i--) {
-                const app = f.pendingApps[i]; app.weeksPending++;
-                if (app.weeksPending >= app.weeksToDecision) {
-                    const successChance = 0.15 + (f.hIndex / 150); 
-                    if(Math.random() < successChance) { 
-                        f.grants.push({ name: `${app.agency} Grant`, remaining: app.amount }); 
-                        f.hIndex += 2; 
-                        
-                        const overheadRate = this.data.policy.overheadRate;
-                        const indirects = app.amount * overheadRate;
-                        const direct = app.amount - indirects;
-                        
-                        const body = `
-                        <div style="font-family:monospace; background:#f4f4f4; padding:10px; border:1px solid #ccc;">
-                            <strong>NOTICE OF AWARD: ${app.agency}-2026-${Math.floor(Math.random()*1000)}</strong><br>
-                            ------------------------------------------------<br>
-                            PI: ${f.name}<br>
-                            Total Award: &nbsp;&nbsp;&nbsp;<strong>$${app.amount.toLocaleString()}</strong><br>
-                            <span style="color:#c0392b;">Indirects (${(overheadRate*100).toFixed(0)}%): -$${indirects.toLocaleString()}</span><br>
-                            ------------------------------------------------<br>
-                            <strong>NET TO LAB: &nbsp;&nbsp;&nbsp;<span style="color:#27ae60;">$${direct.toLocaleString()}</span></strong>
-                        </div>
-                        <p>Funds available immediately.</p>`;
-                        
-                        this.addEmail("OSP", `Award Notice: ${f.name} (${app.agency})`, body, 'notification');
-                    }
-                    f.pendingApps.splice(i, 1);
+processGrantCycle: function() {
+    this.data.faculty.forEach(f => {
+        // 1. Check if they apply
+        const needsMoney = parseFloat(f.runway) < 12 || f.runway === "0.0"; 
+        const canApply = f.pendingApps.length < 2; 
+        
+        // Chance to apply (Higher if they are desperate)
+        if (canApply && Math.random() < (needsMoney ? 0.08 : 0.01)) { 
+            const agency = ["NSF", "NIH", "DOE", "DOD"][Math.floor(Math.random()*4)]; 
+            f.pendingApps.push({ 
+                agency: agency, 
+                amount: 350000 + Math.floor(Math.random()*400000), 
+                weeksPending: 0, 
+                weeksToDecision: 10 + Math.floor(Math.random()*10) 
+            }); 
+        }
+
+        // 2. Process Pending Applications
+        for (let i = f.pendingApps.length - 1; i >= 0; i--) {
+            const app = f.pendingApps[i]; 
+            app.weeksPending++;
+            
+            if (app.weeksPending >= app.weeksToDecision) {
+                const successChance = 0.15 + (f.hIndex / 150); 
+                
+                if(Math.random() < successChance) { 
+                    // --- SUCCESS LOGIC START ---
+                    
+                    // 1. Calculate Lump Sums
+                    const overheadRate = this.data.policy.overheadRate;
+                    const totalAward = app.amount;
+                    const indirects = Math.floor(totalAward * overheadRate); // Money for YOU
+                    const direct = totalAward - indirects;                   // Money for LAB
+                    
+                    // 2. Transfer Funds
+                    f.grants.push({ name: `${app.agency} Grant`, remaining: direct }); 
+                    f.hIndex += 2; 
+                    
+                    this.data.budget += indirects; // <--- INSTANT DEPOSIT TO DEPT
+
+                    // 3. Send Email
+                    const body = `
+                    <div style="font-family:monospace; background:#f4f4f4; padding:10px; border:1px solid #ccc;">
+                        <strong>NOTICE OF AWARD: ${app.agency}-2026-${Math.floor(Math.random()*1000)}</strong><br>
+                        ------------------------------------------------<br>
+                        PI: ${f.name}<br>
+                        Total Award: &nbsp;&nbsp;&nbsp;<strong>$${totalAward.toLocaleString()}</strong><br>
+                        <span style="color:#27ae60;">Indirects To Dept (${(overheadRate*100).toFixed(0)}%): +$${indirects.toLocaleString()}</span><br>
+                        ------------------------------------------------<br>
+                        <strong>NET TO LAB: &nbsp;&nbsp;&nbsp;<span>$${direct.toLocaleString()}</span></strong>
+                    </div>
+                    <p>The overhead funds have been transferred to the Department account.</p>`;
+                    
+                    this.addEmail("OSP", `Award Notice: ${f.name} (${app.agency})`, body, 'notification');
+                    // --- SUCCESS LOGIC END ---
                 }
+                f.pendingApps.splice(i, 1);
             }
-        });
-    },
+        }
+    });
+},
 
     setRecruitmentStrategy: function(target, strategyKey) { const cost = (strategyKey === 'aggressive') ? 7500 : (strategyKey === 'standard' ? 2000 : 0); this.data.budget -= cost; this.data.admissions.targetSize = parseInt(target); this.data.admissions.strategy = strategyKey; this.data.admissions.setupComplete = true; },
     
@@ -458,32 +595,88 @@ const State = {
     
     rejectCandidate: function(appId) { const app = this.data.admissions.pool.find(a => a.id === appId); if(app) app.status = "Rejected"; },
     
-    addEmail: function(sender, subject, body, category='normal') { 
-        this.data.emails.unshift({ id: Date.now() + Math.random(), date: `${this.data.month+1}/${this.data.day}`, sender: sender, subject: subject, body: body, read: false }); 
-        
-        let shouldPause = false;
-        const s = this.data.settings || { pauseOnEmail: true, pauseOnPaper: false };
+    /* Inside state.js -> Replace addEmail function */
 
-        if (category === 'urgent') shouldPause = true; 
-        else if (category === 'paper' && s.pauseOnPaper) shouldPause = true;
-        else if (category === 'notification') shouldPause = false;
-        else if (category === 'normal' && s.pauseOnEmail) shouldPause = true;
+addEmail: function(sender, subject, body, category='normal') { 
+    // CHANGE: We now include 'category: category' in the object
+    this.data.emails.unshift({ 
+        id: Date.now() + Math.random(), 
+        date: `${this.data.month+1}/${this.data.day}`, 
+        sender: sender, 
+        subject: subject, 
+        body: body, 
+        read: false,
+        category: category // <--- CRITICAL NEW FIELD
+    }); 
+    
+    let shouldPause = false;
+    const s = this.data.settings || { pauseOnEmail: true, pauseOnPaper: false };
 
-        if (shouldPause && typeof Game !== 'undefined') {
-             Game.setSpeed(0);
-             if(typeof UI !== 'undefined') UI.notifyNewEmail(sender, subject);
-        }
+    if (category === 'urgent') shouldPause = true; 
+    else if (category === 'paper' && s.pauseOnPaper) shouldPause = true;
+    else if (category === 'notification') shouldPause = false;
+    else if (category === 'normal' && s.pauseOnEmail) shouldPause = true;
 
-        if(typeof UI !== 'undefined' && document.getElementById('screen-office') && !document.getElementById('screen-office').classList.contains('hidden')) { 
-            UI.renderInbox(this.data.emails); 
-        }
-    },
+    if (shouldPause && typeof Game !== 'undefined') {
+            Game.setSpeed(0);
+            if(typeof UI !== 'undefined') UI.notifyNewEmail(sender, subject);
+    }
+
+    if(typeof UI !== 'undefined' && document.getElementById('screen-office') && !document.getElementById('screen-office').classList.contains('hidden')) { 
+        UI.renderInbox(this.data.emails); 
+    }
+},
     
     saveGame: function() { localStorage.setItem('tenureTrackSave', JSON.stringify(this.data)); alert("Game Saved!"); },
     loadGame: function(input) { const load = (json) => { this.data = JSON.parse(json); UI.toggleGameView(true); UI.updateTopBar(this.data); Game.navigate('office'); }; if(input && input.files[0]) { const r = new FileReader(); r.onload = (e) => load(e.target.result); r.readAsText(input.files[0]); } else if (localStorage.getItem('tenureTrackSave')) load(localStorage.getItem('tenureTrackSave')); }
 };
 
-const FinanceSystem = { getProjection: (d) => [d.budget] };
+/* REPLACE THE BOTTOM 'FinanceSystem' CONST WITH THIS: */
+
+/* Inside state.js (Bottom of file) */
+
+const FinanceSystem = { 
+    getProjection: function(data) {
+        const pol = data.policy;
+        const costs = State.COSTS;
+
+        const stateIncome = 65000; 
+        // Overhead is now 0 in the projection because it is random/event-based
+        let overheadIncome = 0; 
+        
+        let facultyCost = 0;
+        let studentCost = 0;
+        const fixedCost = costs.STAFF_WEEKLY + costs.FACILITY_WEEKLY;
+
+        data.faculty.forEach(f => {
+            facultyCost += (f.salary * pol.salaryMod) / 52;
+        });
+
+        data.students.forEach(s => {
+            const stipend = costs.RA_WEEKLY * pol.stipendMod; 
+            if (s.funding === "TA") studentCost += stipend;
+        });
+
+        const weeklyNet = (stateIncome + overheadIncome) - (facultyCost + studentCost + fixedCost);
+
+        let simBudget = data.budget;
+        const projection = [simBudget];
+        let simDay = data.day;
+        let simMonth = data.month;
+        let simYear = data.year;
+
+        for(let w=0; w<52; w++) {
+            simBudget += weeklyNet;
+            simDay += 7;
+            if(simDay > 30) { simDay = 1; simMonth++; if(simMonth > 11) { simMonth = 0; simYear++; } }
+            if(simMonth === 0 && simDay < 8) simBudget += 150000; 
+            if(simMonth === 7 && simDay < 8) simBudget += 150000; 
+            projection.push(simBudget);
+        }
+
+        return projection;
+    }
+};
 
 const ApplicantGenerator = {
     firstNames: [
@@ -576,6 +769,7 @@ const StudentGenerator = {
             year: year, 
             advisorId: advisorId, 
             funding: funding,
+            pubs: year === 1 ? 0 : Math.floor((year - 1) * (0.3 + Math.random() * 1.5)), 
             stats: { brains: Math.floor(Math.random()*100), hands: Math.floor(Math.random()*100), grit: Math.floor(Math.random()*100) }
         };
     },
@@ -597,7 +791,6 @@ const FacultyGenerator = {
             grants.push({ name: `${agency} Grant`, remaining: 200000 + Math.floor(Math.random() * 400000) });
         }
 
-        // --- FIXED: Uses generateName to avoid "Dr. Dr. Smith" ---
         const fullName = ApplicantGenerator.generateName(false);
 
         return {

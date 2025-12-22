@@ -1,5 +1,7 @@
 ﻿/* js/ui.js */
+/* js/ui.js */
 const UI = {
+    currentEmailFilter: 'all',
     elements: {
         menu: document.getElementById('main-menu'),
         setup: document.getElementById('setup-screen'),
@@ -12,6 +14,8 @@ const UI = {
             calendar: document.getElementById('screen-calendar'),
             faculty: document.getElementById('screen-faculty'),
             finance: document.getElementById('screen-finance'),
+            students: document.getElementById('screen-students'),
+            records: document.getElementById('screen-records'), // <--- CHECK THIS LINE
             admissions: document.getElementById('screen-admissions')
         },
         navItems: {
@@ -19,10 +23,12 @@ const UI = {
             calendar: document.getElementById('nav-calendar'),
             faculty: document.getElementById('nav-faculty'),
             finance: document.getElementById('nav-finance'),
+            students: document.getElementById('nav-students'),
+            records: document.getElementById('nav-records'), // <--- AND THIS LINE
             admissions: document.getElementById('nav-admissions')
         }
     },
-
+    // ... rest of the code ...
     updateTopBar: function(stateData) {
         if(!this.elements.budget) return;
         this.elements.budget.innerText = "$" + stateData.budget.toLocaleString();
@@ -417,7 +423,7 @@ const UI = {
             if(prof.happiness < 40) happyColor = "#c0392b";
             card.innerHTML = `
                 <div class="prof-header">
-                    <div><div class="prof-name">Dr. ${prof.name}</div><div class="prof-title">${prof.rankLabel}</div></div>
+                    <div><div class="prof-name"> ${prof.name}</div><div class="prof-title">${prof.rankLabel}</div></div>
                     <div class="prof-field">${prof.field}</div>
                 </div>
                 <div class="prof-stats-row"><span>h-index: <strong>${prof.hIndex}</strong></span><span>Grads: <strong>${prof.students ? prof.students.length : 0}</strong></span></div>
@@ -612,7 +618,200 @@ const UI = {
             }
         }
     },
+// --- PASTE ALL OF THIS CODE ---
+    
+    renderStudents: function(data) {
+        const container = this.elements.screens.students;
+        const students = data.students;
+        
+        if(!students || students.length === 0) {
+            container.innerHTML = `<div class="empty-state">No graduate students enrolled.<br>Wait for admissions season.</div>`;
+            return;
+        }
 
+        // Calculate Stats
+        const total = students.length;
+        const fundingCounts = { RA: 0, TA: 0, Fellowship: 0 };
+        let totalPubs = 0;
+        let candidates = 0; 
+        const cohorts = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+
+        students.forEach(s => {
+            fundingCounts[s.funding] = (fundingCounts[s.funding] || 0) + 1;
+            totalPubs += (s.pubs || 0);
+            if(s.year > 2) candidates++;
+            
+            if(s.year >= 5) cohorts[5].push(s);
+            else cohorts[s.year].push(s);
+        });
+
+        // Dashboard HTML
+        const dashboard = `
+            <div style="background:white; border-bottom:1px solid #ddd; padding:20px; display:flex; gap:30px; align-items:center;">
+                <div style="flex:1;">
+                    <h2 style="margin:0 0 10px 0;">Grad Student Life</h2>
+                    <div style="font-size:0.9rem; color:#666;">
+                        Total Students: <strong>${total}</strong><br>
+                        PhD Candidates: <strong>${candidates}</strong> (Qualified)<br>
+                        Student Papers: <strong>${totalPubs}</strong>
+                    </div>
+                </div>
+                <div style="flex:1; border-left:1px solid #eee; padding-left:20px;">
+                    <h4 style="margin:0 0 10px 0;">Funding Distribution</h4>
+                    ${this.renderPieChart(fundingCounts)}
+                </div>
+                 <div style="flex:1; border-left:1px solid #eee; padding-left:20px; font-size:0.8rem; line-height:1.6;">
+                    <div><span style="display:inline-block; width:10px; height:10px; background:#e74c3c;"></span> TA (Teaching)</div>
+                    <div><span style="display:inline-block; width:10px; height:10px; background:#2ecc71;"></span> RA (Grant Funded)</div>
+                    <div><span style="display:inline-block; width:10px; height:10px; background:#f1c40f;"></span> Fellowship (Free)</div>
+                </div>
+            </div>
+        `;
+
+        // Columns HTML
+        let columnsHtml = "";
+        for(let i=1; i<=5; i++) {
+            const cohortList = cohorts[i];
+            const title = i === 5 ? "G5+" : `G${i}`;
+            const sub = i === 1 ? "Rotations/Classes" : (i === 2 ? "Quals Prep" : "Dissertation");
+            
+            let cards = cohortList.map(s => {
+                const adv = data.faculty.find(f => f.id === s.advisorId);
+                const advName = adv ? adv.name.split(' ').pop() : "Unknown";
+                const fundColor = s.funding === 'RA' ? '#2ecc71' : (s.funding === 'TA' ? '#e74c3c' : '#f1c40f');
+                const isCand = s.year > 2 ? "🎓" : "";
+                
+                return `
+                <div style="background:white; border:1px solid #ddd; padding:10px; margin-bottom:10px; border-left:3px solid ${fundColor}; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="font-weight:bold; font-size:0.9rem; display:flex; justify-content:space-between;">
+                        <span>${s.name.split(' (')[0]} ${isCand}</span>
+                        <span style="font-size:0.8rem; color:#666;">${s.funding}</span>
+                    </div>
+                    <div style="font-size:0.8rem; color:#666; margin-top:3px;">
+                        Lab: ${advName}
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:0.75rem; color:#888;">
+                        <span>🧠 ${s.stats.brains} | ✋ ${s.stats.hands}</span>
+                        <span>📜 ${s.pubs || 0} Pubs</span>
+                    </div>
+                </div>`;
+            }).join('');
+
+            if(cohortList.length === 0) cards = `<div style="font-size:0.8rem; color:#aaa; font-style:italic; text-align:center; padding:20px;">Empty</div>`;
+
+            columnsHtml += `
+                <div style="flex:1; min-width:200px; background:#f8f9fa; border-right:1px solid #eee; display:flex; flex-direction:column;">
+                    <div style="padding:10px; background:#eee; border-bottom:1px solid #ddd; text-align:center;">
+                        <div style="font-weight:bold; color:#2c3e50;">${title}</div>
+                        <div style="font-size:0.7rem; color:#666;">${sub}</div>
+                    </div>
+                    <div style="padding:10px; overflow-y:auto; flex:1;">
+                        ${cards}
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = `
+            <div style="display:flex; flex-direction:column; height:100%;">
+                ${dashboard}
+                <div style="display:flex; flex:1; overflow-x:auto;">
+                    ${columnsHtml}
+                </div>
+            </div>
+        `;
+    },
+
+    renderPieChart: function(counts) {
+        const total = counts.RA + counts.TA + counts.Fellowship || 1;
+        const raP = (counts.RA / total) * 100;
+        const taP = (counts.TA / total) * 100;
+        const felP = (counts.Fellowship / total) * 100;
+
+        return `
+        <svg width="100" height="100" viewBox="0 0 42 42" class="donut">
+          <circle class="donut-hole" cx="21" cy="21" r="15.91549430918954" fill="#fff"></circle>
+          <circle class="donut-ring" cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#dcdcdc" stroke-width="5"></circle>
+          <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#e74c3c" stroke-width="5" stroke-dasharray="${taP} ${100-taP}" stroke-dashoffset="25"></circle>
+          <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#2ecc71" stroke-width="5" stroke-dasharray="${raP} ${100-raP}" stroke-dashoffset="${25 - taP}"></circle>
+          <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#f1c40f" stroke-width="5" stroke-dasharray="${felP} ${100-felP}" stroke-dashoffset="${25 - taP - raP}"></circle>
+        </svg>
+        `;
+    },
+renderRecords: function(data) {
+        const container = this.elements.screens.records;
+        const pubs = data.publications || [];
+
+        if(pubs.length === 0) {
+            container.innerHTML = `<div class="empty-state">No publications yet.<br>Research takes time!</div>`;
+            return;
+        }
+
+        // Sort by Impact High -> Low
+        const sortedPubs = [...pubs].sort((a, b) => b.impact - a.impact);
+        
+        // Find the "Star Professor" (Most Papers)
+        const profCounts = {};
+        let starProf = { name: "None", count: 0 };
+        pubs.forEach(p => {
+            profCounts[p.author] = (profCounts[p.author] || 0) + 1;
+            if(profCounts[p.author] > starProf.count) {
+                starProf = { name: p.author, count: profCounts[p.author] };
+            }
+        });
+
+        // Generate Table Rows
+        const rows = sortedPubs.map((p, index) => {
+            let medal = "";
+            if (index === 0) medal = "🥇";
+            if (index === 1) medal = "🥈";
+            if (index === 2) medal = "🥉";
+            
+            let impactColor = "#555";
+            if(p.impact >= 9) impactColor = "#8e44ad"; // Purple
+            else if(p.impact >= 6) impactColor = "#2980b9"; // Blue
+
+            return `
+            <tr style="border-bottom:1px solid #eee;">
+                <td style="padding:12px;">${medal} ${p.year}</td>
+                <td style="padding:12px;">
+                    <div style="font-weight:bold; color:#2c3e50;">${p.title}</div>
+                    <div style="font-size:0.85rem; color:#666; font-style:italic;">${p.journal}</div>
+                </td>
+                <td style="padding:12px;">${p.author}</td>
+                <td style="padding:12px; font-weight:bold; color:${impactColor};">${p.impact.toFixed(1)}</td>
+                <td style="padding:12px;">${p.citations}</td>
+            </tr>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div style="padding:20px; background:white; border-bottom:1px solid #ddd; margin-bottom:20px;">
+                <h2 style="margin-top:0;">Department Records</h2>
+                <div style="display:flex; gap:20px; font-size:0.9rem; color:#666;">
+                    <div>Total Publications: <strong style="color:#2c3e50;">${pubs.length}</strong></div>
+                    <div>Most Prolific: <strong style="color:#2c3e50;">${starProf.name} (${starProf.count})</strong></div>
+                </div>
+            </div>
+            
+            <div style="padding:0 20px 20px 20px;">
+                <table style="width:100%; background:white; border-collapse:collapse; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                    <thead style="background:#f8f9fa; border-bottom:2px solid #ddd;">
+                        <tr>
+                            <th style="text-align:left; padding:12px; color:#555;">Year</th>
+                            <th style="text-align:left; padding:12px; color:#555;">Paper Details</th>
+                            <th style="text-align:left; padding:12px; color:#555;">PI</th>
+                            <th style="text-align:left; padding:12px; color:#555;">Impact (/10)</th>
+                            <th style="text-align:left; padding:12px; color:#555;">Citations</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    },
+    // --- END PASTE ---
     renderCalendar: function(gameState, viewState) { 
         const container = this.elements.screens.calendar; 
         container.innerHTML = ''; 
@@ -655,51 +854,97 @@ const UI = {
         overlay.innerHTML = `<div class="dossier-paper" style="max-width:500px;"><h2 style="margin-top:0; border-bottom:2px solid #333; padding-bottom:10px;">${event.title}</h2><p style="font-size:1.1rem; line-height:1.5; color:#444; margin-bottom:20px;">${event.desc}</p><div style="background:#f4f4f4; padding:20px; border:1px solid #ddd;">${choiceHtml}</div></div>`; document.body.appendChild(overlay);
     },
 
-    renderInbox: function(emails) { 
-        const container = this.elements.screens.office; 
+    /* Inside ui.js -> Replace renderInbox function */
+
+/* Inside js/ui.js -> Replace renderInbox */
+
+/* Inside js/ui.js -> Replace the entire renderInbox function */
+
+renderInbox: function(emails) {
+    const listContainer = document.getElementById('email-list');
+    if(!listContainer) return;
+
+    // 1. Filter Logic
+    const filter = this.currentEmailFilter || 'all';
+    
+    const filteredEmails = emails.filter(e => {
+        const cat = e.category || 'normal'; 
+        const sub = e.subject.toLowerCase();
+        const sen = e.sender.toLowerCase();
+
+        if (filter === 'all') return true;
         
-        if (!container.querySelector('.outlook-layout')) { 
-            container.innerHTML = `
-                <div class="outlook-layout">
-                    <div class="email-list-pane">
-                        <div class="outlook-header">
-                            <span>Inbox</span><span id="unread-count"></span>
-                        </div>
-                        <div class="email-list-scroll" id="email-list-container"></div>
-                    </div>
-                    <div class="email-view-pane">
-                        <div id="email-reading-view" class="hidden">
-                            <div class="email-view-header">
-                                <div class="view-subject" id="view-subject"></div>
-                                <div id="view-from" style="font-weight:bold; color:#2c3e50;"></div>
-                                <div id="view-date" style="font-size:0.8rem; color:#888;"></div>
-                            </div>
-                            <div class="view-body" id="view-body"></div>
-                        </div>
-                        <div id="email-empty-view" class="empty-state">Select an email to read.</div>
-                    </div>
-                </div>`; 
-        } 
+        // Urgent / Dilemmas
+        if (filter === 'urgent') return cat === 'urgent';
         
-        const listContainer = document.getElementById('email-list-container'); 
-        listContainer.innerHTML = ''; 
+        // Research Papers
+        if (filter === 'paper') return cat === 'paper';
         
-        let unread = 0; 
-        emails.forEach(email => { 
-            if(!email.read) unread++; 
-            const item = document.createElement('div'); 
-            item.className = `email-item ${email.read ? 'read' : 'unread'}`; 
-            item.onclick = () => UI.openEmail(email.id); 
-            item.innerHTML = `
-                <div class="email-sender">${email.sender}</div>
-                <div class="email-subject">${email.subject}</div>
-                <div class="email-date">${email.date}</div>`; 
-            listContainer.appendChild(item); 
-        }); 
+        // Grants (Money)
+        if (filter === 'grant') {
+            return sen.includes('osp') || sub.includes('grant') || sub.includes('award');
+        }
         
-        const countSpan = document.getElementById('unread-count');
-        if(countSpan) countSpan.innerText = unread > 0 ? `${unread} Unread` : ''; 
-    },
+        // Admissions (Students)
+        if (filter === 'admissions') {
+            // FIX: Explicitly ignore papers so "Pub Accepted" doesn't trigger this
+            if (cat === 'paper') return false;
+            
+            return sen.includes('admission') || sub.includes('application') || sub.includes('accept') || sub.includes('decline');
+        }
+        
+        // General (Everything else)
+        if (filter === 'normal') {
+            const isSpecial = cat === 'urgent' || cat === 'paper' || sen.includes('osp') || sub.includes('grant') || sen.includes('admission');
+            return !isSpecial;
+        }
+        return true;
+    });
+
+    // 2. Build Filter Dropdown
+    const filters = [
+        { id: 'all', label: '📂 All Emails' },
+        { id: 'urgent', label: '⚠️ Dilemmas / Urgent' },
+        { id: 'grant', label: '💰 Grant Notifications' },
+        { id: 'paper', label: '📄 Research Papers' },
+        { id: 'admissions', label: '🎓 Admissions' },
+        { id: 'normal', label: '✉️ General Inbox' }
+    ];
+
+    let filterHtml = `
+    <div style="padding:10px; border-bottom:1px solid #ddd; background:#f4f4f4;">
+        <select onchange="UI.setInboxFilter(this.value)" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:0.9rem; color:#2c3e50;">
+            ${filters.map(f => `<option value="${f.id}" ${filter === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}
+        </select>
+    </div>
+    `;
+
+    // 3. Build Email List HTML
+    const listHtml = filteredEmails.map(email => {
+        let icon = "";
+        // Minimal icons since the dropdown explains the categories
+        if(email.category === 'paper') icon = "📄 ";
+        if(email.category === 'urgent') icon = "⚠️ ";
+        if(email.sender === 'OSP') icon = "💰 ";
+        
+        const readClass = email.read ? 'read' : 'active';
+        return `
+        <div class="email-item ${readClass}" onclick="UI.openEmail(${email.id})">
+            <div class="email-sender">${icon}${email.sender}</div>
+            <div class="email-subject">${email.subject}</div>
+            <div class="email-date">${email.date}</div>
+        </div>`;
+    }).join('');
+
+    // 4. Render
+    listContainer.innerHTML = filterHtml + (listHtml || `<div style="padding:40px 20px; text-align:center; color:#999; font-style:italic;">No emails in this folder.</div>`);
+},
+
+// ADD THIS NEW HELPER FUNCTION RIGHT AFTER renderInbox:
+setInboxFilter: function(filterKey) {
+    this.currentEmailFilter = filterKey;
+    this.renderInbox(State.data.emails);
+},
 
     openEmail: function(id) { 
         const email = State.data.emails.find(e => e.id === id); 
