@@ -175,7 +175,44 @@ const Game = {
         this.financeTab = tab;
         UI.renderFinance(State.data, this.financeTab);
     },
-
+    init: function() {
+        console.log("🚀 System Initializing...");
+        
+        // 1. Setup UI Buttons (Exit button, etc.)
+        UI.setupNavigation(); 
+        
+        // 2. TRY TO LOAD SAVE FIRST
+        if(State.loadGame()) {
+            // If true, we found data in LocalStorage. Resume immediately.
+            console.log("📂 Save found. Resuming game...");
+            this.resumeGame();
+        } else {
+            // If false, we stay on the Main Menu.
+            console.log("✨ No save found. Waiting for user on Main Menu.");
+            // Ensure the menu is visible and game is hidden
+            UI.toggleGameView(false);
+        }
+    },
+    
+    resumeGame: function() {
+        // 1. Sync View State
+        this.viewState.month = State.data.month;
+        this.viewState.year = State.data.year;
+        
+        // 2. Hide Menu, Show Game
+        UI.toggleGameView(true);
+        
+        // 3. Restore Last Screen
+        const lastScreen = localStorage.getItem('tenureTrackScreen') || 'office';
+        UI.showScreen(lastScreen);
+        
+        // 4. Update Header
+        UI.updateTopBar(State.data);
+        
+        // 5. Start Loop (Paused)
+        Game.setSpeed(0); 
+        this.gameLoop();
+    },
     setSpeed: function(speedIndex) {
         this.currentSpeed = speedIndex;
         UI.updateSpeedButtons(speedIndex);

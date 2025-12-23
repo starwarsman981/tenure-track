@@ -140,5 +140,42 @@ const FACULTY_SEARCH = {
         "Full": { min: 1500000, max: 3000000 }
     }
 };
+
+/* Add to js/data.js */
+
+const FACULTY_INTERVIEWS = {
+    QUESTIONS: [
+        { id: "vision", text: "What is your lab's long-term vision?" },
+        { id: "funding", text: "What is your funding strategy?" },
+        { id: "students", text: "What is your mentorship style?" },
+        { id: "collabs", text: "How do you view collaboration?" }
+    ],
+    // Answers are "flavored" based on the candidate's hidden personality logic
+    ANSWERS: {
+        vision: [
+            "I plan to keep a small, elite team focused on high-impact papers.",
+            "I want to build a large empire. We will flood the journals.",
+            "I focus on industry applications. I want patents, not just papers."
+        ],
+        funding: [
+            "I will aggressively pursue R01s immediately.",
+            "I rely on corporate partnerships to fund the expensive equipment.",
+            "I can run lean. I don't need much grant money to start."
+        ],
+        students: [
+            "I expect 60 hours a week. Science is a lifestyle.",
+            "I am hands-off. I let them sink or swim.",
+            "My lab is a family. I nurture my students carefully."
+        ],
+        collabs: [
+            "I prefer to work alone. Less drama.",
+            "I want to collaborate with the Med School heavily.",
+            "I'm open to it, provided I am the corresponding author."
+        ]
+    }
+};
+
+
+
 // Date-specific events
 const EVENTS_DB = [];

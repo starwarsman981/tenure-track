@@ -30,6 +30,33 @@ const UI = {
             search: document.getElementById('nav-search'),
         }
     },
+
+    setupNavigation: function() {
+        // 1. Create Exit Button if it doesn't exist
+        if(!document.getElementById('btn-exit-game')) {
+            const sidebar = document.querySelector('.sidebar') || document.getElementById('main-nav')?.parentElement;
+            
+            if(sidebar) {
+                const exitBtn = document.createElement('button');
+                exitBtn.id = 'btn-exit-game';
+                exitBtn.className = 'nav-item';
+                exitBtn.style.marginTop = "auto"; 
+                exitBtn.style.background = "#c0392b"; 
+                exitBtn.style.color = "white";
+                exitBtn.style.borderTop = "1px solid #a93226";
+                exitBtn.innerHTML = `🚪 Exit to Menu`;
+                
+                exitBtn.onclick = () => {
+                    Game.setSpeed(0);
+                    State.saveGame(); 
+                    this.elements.game.classList.add('hidden');
+                    this.elements.menu.classList.remove('hidden');
+                };
+                
+                sidebar.appendChild(exitBtn);
+            }
+        }
+    },
     // ... rest of the code ...
     updateTopBar: function(stateData) {
         if(!this.elements.budget) return;
@@ -65,6 +92,9 @@ const UI = {
         if (screenName === 'finance') this.renderFinance(State.data, Game.financeTab);
         if (screenName === 'admissions') this.renderAdmissions(State.data);
         if (screenName === 'search') this.renderFacultySearch(State.data);
+        // AUTO-SAVE LOCATION
+        localStorage.setItem('tenureTrackScreen', screenName);
+        State.saveGame();
     },
 
     toggleGameView: function(isGameActive) {
@@ -362,79 +392,130 @@ const UI = {
         container.innerHTML = html; 
     },
 
-    renderFaculty: function(roster, filters) { 
-        const container = this.elements.screens.faculty; 
-        container.innerHTML = ''; 
-        let displayList = [...roster]; 
-        if (filters.rank !== 'all') displayList = displayList.filter(p => p.rank === filters.rank); 
-        if (filters.field !== 'all') displayList = displayList.filter(p => p.field === filters.field); 
-        displayList.sort((a, b) => { 
-            if (filters.sort === 'runway') { 
-                const rA = a.runway === 'Inf' ? 999 : parseFloat(a.runway); 
-                const rB = b.runway === 'Inf' ? 999 : parseFloat(b.runway); 
-                return rA - rB; 
-            } 
-            return b[filters.sort] - a[filters.sort]; 
-        }); 
-        const isSel = (cat, val) => filters[cat] === val ? 'selected' : '';
-        const toolbar = document.createElement('div'); 
-        toolbar.className = 'cal-toolbar'; 
-        toolbar.innerHTML = `
-            <div style="display:flex; gap:10px;">
-                <select onchange="Game.setRosterFilter('rank', this.value)" style="padding:5px;">
-                    <option value="all" ${isSel('rank','all')}>Rank: All</option>
-                    <option value="Adjunct" ${isSel('rank','Adjunct')}>Adjunct</option>
-                    <option value="Assistant" ${isSel('rank','Assistant')}>Assistant</option>
-                    <option value="Associate" ${isSel('rank','Associate')}>Associate</option>
-                    <option value="Full" ${isSel('rank','Full')}>Full</option>
+    renderFaculty: function(faculty, filters) {
+        const container = this.elements.screens.faculty;
+        
+        // 1. Safety Check for Filters
+        filters = filters || { rank: 'all', field: 'all', sort: 'name' };
+        
+        // 2. Define the Filter Bar HTML
+        const rankSel = filters.rank === 'all' ? 'selected' : '';
+        const rankAsst = filters.rank === 'Assistant' ? 'selected' : '';
+        const rankAssoc = filters.rank === 'Associate' ? 'selected' : '';
+        const rankFull = filters.rank === 'Full' ? 'selected' : '';
+
+        const fieldSel = filters.field === 'all' ? 'selected' : '';
+        const fieldOrg = filters.field === 'Organic' ? 'selected' : '';
+        const fieldInorg = filters.field === 'Inorganic' ? 'selected' : '';
+        const fieldPhys = filters.field === 'Physical' ? 'selected' : '';
+        const fieldAna = filters.field === 'Analytical' ? 'selected' : '';
+        const fieldMat = filters.field === 'Materials' ? 'selected' : '';
+
+        const sortName = filters.sort === 'name' ? 'selected' : '';
+        const sortH = filters.sort === 'hIndex' ? 'selected' : '';
+        const sortFund = filters.sort === 'funds' ? 'selected' : '';
+
+        const filterBarHtml = `
+            <div class="filter-bar">
+                <select onchange="Game.setRosterFilter('rank', this.value)">
+                    <option value="all" ${rankSel}>All Ranks</option>
+                    <option value="Assistant" ${rankAsst}>Assistant</option>
+                    <option value="Associate" ${rankAssoc}>Associate</option>
+                    <option value="Full" ${rankFull}>Full Prof</option>
                 </select>
-                <select onchange="Game.setRosterFilter('field', this.value)" style="padding:5px;">
-                    <option value="all" ${isSel('field','all')}>Field: All</option>
-                    <option value="Organic" ${isSel('field','Organic')}>Organic</option>
-                    <option value="Inorganic" ${isSel('field','Inorganic')}>Inorganic</option>
-                    <option value="Physical" ${isSel('field','Physical')}>Physical</option>
-                    <option value="Analytical" ${isSel('field','Analytical')}>Analytical</option>
-                    <option value="Materials" ${isSel('field','Materials')}>Materials</option>
+                <select onchange="Game.setRosterFilter('field', this.value)">
+                    <option value="all" ${fieldSel}>All Fields</option>
+                    <option value="Organic" ${fieldOrg}>Organic</option>
+                    <option value="Inorganic" ${fieldInorg}>Inorganic</option>
+                    <option value="Physical" ${fieldPhys}>Physical</option>
+                    <option value="Analytical" ${fieldAna}>Analytical</option>
+                    <option value="Materials" ${fieldMat}>Materials</option>
                 </select>
-            </div>
-            <div style="font-weight:bold; color:#666;">${displayList.length} Faculty</div>
-            <div>
-                <select onchange="Game.setRosterSort(this.value)" style="padding:5px;">
-                    <option value="hIndex" ${filters.sort === 'hIndex' ? 'selected' : ''}>Sort: H-Index</option>
-                    <option value="runway" ${filters.sort === 'runway' ? 'selected' : ''}>Sort: Runway</option>
-                    <option value="salary" ${filters.sort === 'salary' ? 'selected' : ''}>Sort: Salary</option>
+                <select onchange="Game.setRosterSort(this.value)">
+                    <option value="name" ${sortName}>Sort: Name</option>
+                    <option value="hIndex" ${sortH}>Sort: H-Index</option>
+                    <option value="funds" ${sortFund}>Sort: Funding</option>
                 </select>
-            </div>`; 
-        container.appendChild(toolbar); 
-        const grid = document.createElement('div'); 
-        grid.className = 'roster-grid'; 
-        displayList.forEach(prof => { 
-            const card = document.createElement('div'); 
-            card.className = `prof-card rank-${prof.rank}`; 
-            card.onclick = () => UI.showDossier(prof); 
-            let runwayColor = "#555"; 
-            if (prof.runway !== 'Inf' && prof.runway !== 'Stable') { 
-                const r = parseFloat(prof.runway); 
-                if (r < 6) runwayColor = "#c0392b"; 
-                else if (r < 12) runwayColor = "#f39c12"; 
-                else runwayColor = "#27ae60"; 
-            } 
-            let fundsDisplay = prof.rank === 'Adjunct' ? "No Lab" : `$${(prof.funds/1000).toFixed(0)}k Reserves`;
-            if (prof.grants.length > 0) fundsDisplay = `${prof.grants.length} Active Grants`;
-            let happyColor = "#27ae60";
-            if(prof.happiness < 70) happyColor = "#f39c12";
-            if(prof.happiness < 40) happyColor = "#c0392b";
-            card.innerHTML = `
-                <div class="prof-header">
-                    <div><div class="prof-name"> ${prof.name}</div><div class="prof-title">${prof.rankLabel}</div></div>
-                    <div class="prof-field">${prof.field}</div>
-                </div>
-                <div class="prof-stats-row"><span>h-index: <strong>${prof.hIndex}</strong></span><span>Grads: <strong>${prof.students ? prof.students.length : 0}</strong></span></div>
-                <div class="prof-stats-row" style="margin-top:5px;"><span style="font-size:0.75rem;">${fundsDisplay}</span><span style="color:${runwayColor}; font-weight:bold; font-size:0.75rem;">Runway: ${prof.runway}</span></div>
-                <div style="margin-top:5px; font-size:0.7rem;">Morale: <span style="color:${happyColor}; font-weight:bold;">${Math.floor(prof.happiness || 100)}%</span></div>`; 
-            grid.appendChild(card); 
-        }); 
-        container.appendChild(grid); 
+            </div>`;
+
+        // 3. Filter the Data
+        let filtered = faculty;
+        if(filters.rank !== 'all') filtered = filtered.filter(f => f.rank === filters.rank);
+        if(filters.field !== 'all') filtered = filtered.filter(f => f.field === filters.field);
+        
+        // 4. Sort the Data
+        if(filters.sort === 'hIndex') filtered.sort((a,b) => b.hIndex - a.hIndex);
+        if(filters.sort === 'funds') filtered.sort((a,b) => b.funds - a.funds);
+        if(filters.sort === 'name') filtered.sort((a,b) => a.name.localeCompare(b.name));
+
+        // 5. Generate Content HTML
+        let contentHtml = "";
+
+        if(filtered.length === 0) {
+            contentHtml = `
+                <div class="empty-state" style="margin-top:50px;">
+                    No faculty match these filters.
+                    <br><br>
+                    <button class="btn-small" onclick="Game.setRosterFilter('rank', 'all'); Game.setRosterFilter('field', 'all');">Reset Filters</button>
+                </div>`;
+        } else {
+            contentHtml = `<div class="faculty-grid">` + filtered.map(f => {
+                const isTenured = f.rank === "Associate" || f.rank === "Full";
+                const borderColor = isTenured ? '#34495e' : '#27ae60'; 
+
+                let tenureSection = "";
+                let bottomAction = "";
+
+                if(f.rank === "Assistant" && f.tenureTrack) {
+                    const pct = (f.tenureTrack.year / 6) * 100;
+                    let barColor = "#2ecc71";
+                    if(f.tenureTrack.year >= 5) barColor = "#e67e22";
+                    
+                    tenureSection = `
+                    <div style="margin: 8px 0;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#666; margin-bottom:3px;">
+                            <strong>Tenure Track</strong>
+                            <span>Yr ${f.tenureTrack.year}/6</span>
+                        </div>
+                        <div style="width:100%; height:6px; background:#f1f2f6; border-radius:3px; overflow:hidden;">
+                            <div style="width:${pct}%; height:100%; background:${barColor};"></div>
+                        </div>
+                    </div>`;
+                    
+                    bottomAction = `<button class="btn-small" style="width:100%; margin-top:8px;" onclick="UI.viewTenureDossier(${f.id})">📂 View Dossier</button>`;
+                } else {
+                    bottomAction = `<div style="margin-top:auto; padding-top:10px; font-size:0.75rem; color:#95a5a6; text-align:center; border-top:1px solid #eee;">Tenured Faculty</div>`;
+                }
+
+                return `
+                <div class="faculty-card" style="border-left: 4px solid ${borderColor};">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <div style="font-weight:bold; font-size:1rem; color:#2980b9; cursor:pointer; text-decoration:underline;" 
+                                 onclick="UI.viewFacultyDetail(${f.id})" 
+                                 title="View Lab Details">
+                                 ${f.name}
+                            </div>
+                            <div style="font-size:0.8rem; color:#7f8c8d;">${f.rank}</div>
+                        </div>
+                        <div style="font-size:0.75rem; background:#f0f3f4; color:#2c3e50; padding:2px 8px; border-radius:12px; font-weight:bold;">${f.field}</div>
+                    </div>
+                    
+                    ${tenureSection}
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:0.85rem; background:#fafafa; padding:8px; border-radius:4px;">
+                        <div>🧪 H-Index: <strong>${f.hIndex}</strong></div>
+                        <div>💰 $${(f.funds/1000).toFixed(0)}k</div>
+                        <div>👥 Grads: <strong>${f.students.length}</strong></div>
+                        <div>⚡ Morale: <strong>${Math.round(f.happiness)}%</strong></div>
+                    </div>
+                    
+                    ${bottomAction}
+                </div>`;
+            }).join('') + `</div>`;
+        }
+
+        container.innerHTML = filterBarHtml + contentHtml;
     },
 
     showDossier: function(prof) { 
@@ -1018,44 +1099,84 @@ renderRecords: function(data) {
     viewCV: function(id) {
         const c = State.data.facultySearch.pool.find(x => x.id === id);
         const pane = document.getElementById('cv-view-pane');
+        const phase = State.data.facultySearch.phase; // 'longlist' or 'interview' or 'complete'
         
-        // Determine what buttons to show based on status
+        // --- 1. ACTION AREA LOGIC ---
         let actionArea = "";
         
-        if(c.status === 'Applied') {
-            // Phase 1: Shortlist
-            actionArea = `<button class="btn-main" onclick="State.shortlistCandidate(${c.id})">Shortlist for Flyout (-$1,500)</button>`;
-        
-        } else if(c.status === 'Shortlist') {
-            // Phase 2: Negotiation (THIS WAS MISSING BEFORE)
-            actionArea = `
-                <div style="background:#f4f4f4; padding:15px; border:1px solid #ccc; border-radius:4px;">
-                    <h4 style="margin-top:0;">Extend Offer</h4>
-                    <div style="margin-bottom:10px;">
-                        <label>Startup Package Offer ($):</label><br>
-                        <input type="number" id="offer-amt-${c.id}" value="${c.startupAsk}" style="font-size:1.1rem; padding:5px; width:150px;">
-                    </div>
-                    <button class="btn-main" style="background:#27ae60; color:white;" 
-                        onclick="State.makeFacultyOffer(${c.id}, parseInt(document.getElementById('offer-amt-${c.id}').value))">
-                        Send Offer
-                    </button>
-                    <p style="font-size:0.8rem; color:#666; margin-top:5px;">Warning: This amount is deducted immediately.</p>
+        // PHASE 1: LONGLIST (October) - Only allow Shortlisting
+        if(phase === 'longlist') {
+            if(c.status === 'Applied') {
+                actionArea = `<div style="background:#fff; border:1px solid #ddd; padding:15px; text-align:center;">
+                    <p>Reviewing Applications (Oct)</p>
+                    <button class="btn-main" onclick="State.shortlistCandidate(${c.id})">Shortlist Candidate</button>
                 </div>`;
+            } else if (c.status === 'Shortlist') {
+                actionArea = `<div style="background:#e8f8f5; border:1px solid #2ecc71; padding:15px; text-align:center; color:#27ae60; font-weight:bold;">
+                    ✅ Shortlisted for November
+                </div>`;
+            }
         
+        // PHASE 2: INTERVIEWS (November+) - Allow Interviews & Offers
+        } else if(phase === 'interview') {
+            
+            if(c.status === 'Shortlist') {
+                // Generate Question Buttons
+                let interviewButtons = "";
+                if(typeof FACULTY_INTERVIEWS !== 'undefined') {
+                    FACULTY_INTERVIEWS.QUESTIONS.forEach(q => {
+                        const alreadyAsked = c.interviewLog.find(log => log.q === q.text);
+                        if(!alreadyAsked) {
+                            interviewButtons += `<button class="btn-small" style="margin:2px;" onclick="State.interviewFaculty(${c.id}, '${q.id}')">${q.text}</button> `;
+                        }
+                    });
+                }
+                if(interviewButtons === "") interviewButtons = "<small>All questions asked.</small>";
+
+                // Generate Log
+                let logHtml = "";
+                if(c.interviewLog.length > 0) {
+                    logHtml = c.interviewLog.map(l => `<div style="margin-bottom:8px; border-bottom:1px solid #eee; padding-bottom:5px;"><strong>Q: ${l.q}</strong><br><em style="color:#555;">"${l.a}"</em></div>`).join('');
+                    logHtml = `<div style="margin-top:10px; background:#f9f9f9; padding:10px; border:1px solid #eee; max-height:150px; overflow-y:auto;">${logHtml}</div>`;
+                }
+
+                actionArea = `
+                    <div style="background:#fdfbf7; padding:15px; border:1px solid #ccc; margin-bottom:20px;">
+                        <h4 style="margin-top:0;">1. Interview Phase</h4>
+                        <div style="margin-bottom:10px;">${interviewButtons}</div>
+                        ${logHtml}
+                    </div>
+
+                    <div style="background:#f4f4f4; padding:15px; border:1px solid #ccc; border-radius:4px;">
+                        <h4 style="margin-top:0;">2. Job Offer</h4>
+                        <div style="margin-bottom:10px;">
+                            <label>Startup Package Offer ($):</label><br>
+                            <input type="number" id="offer-amt-${c.id}" value="${c.startupAsk}" style="font-size:1.1rem; padding:5px; width:150px;">
+                        </div>
+                        <button class="btn-main" style="background:#27ae60; color:white;" 
+                            onclick="State.makeFacultyOffer(${c.id}, parseInt(document.getElementById('offer-amt-${c.id}').value))">
+                            Send Final Offer
+                        </button>
+                    </div>`;
+            } else {
+                 actionArea = `<div style="padding:15px; text-align:center; color:#999;">Candidate Rejected (Not Shortlisted)</div>`;
+            }
         } else {
-            // Phase 3: Closed
+            // Search Complete / Inactive
             let color = c.status === 'Declined' ? '#c0392b' : '#2c3e50';
-            actionArea = `<button class="btn-main" disabled style="border-color:${color}; color:${color};">${c.status}</button>`;
+            actionArea = `<button class="btn-main" disabled style="border-color:${color}; color:${color}; width:100%;">${c.status}</button>`;
         }
 
+        // --- 2. RENDER THE CV ---
         pane.innerHTML = `
         <div class="dossier-paper" style="margin:20px; height:90%; overflow-y:auto;">
             <div style="border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:end;">
                 <div>
                     <h1 style="margin:0; font-family:'Georgia', serif;">${c.name}</h1>
-                    <div style="font-style:italic;">Curriculum Vitae</div>
+                    <div style="font-style:italic;">${c.field} Chemist</div>
                 </div>
                 <div style="text-align:right;">
+                    <div style="background:#2c3e50; color:white; padding:2px 8px; font-size:0.8rem; border-radius:4px; display:inline-block; margin-bottom:5px;">${c.field}</div>
                     <div><strong>H-Index:</strong> ${c.hIndex}</div>
                 </div>
             </div>
@@ -1067,19 +1188,187 @@ renderRecords: function(data) {
             </div>
 
             <div class="dossier-section">
-                <div class="dossier-label">Research Statement</div>
-                <p>My work focuses on the intersection of modern synthesis and biological systems. I propose to build a lab that utilizes ${c.startupAsk > 600000 ? "expensive cryo-EM equipment" : "standard synthetic hoods"} to answer fundamental questions.</p>
+                <div class="dossier-label">Lab Strategy</div>
+                <div style="margin-bottom:5px;"><strong>Target Lab Size:</strong> ${c.labSize || "Medium"}</div>
+                <p>My work in ${c.field} chemistry requires a ${c.startupAsk > 600000 ? "high-capital equipment setup" : "standard wet-lab setup"}. 
+                I intend to pursue funding immediately upon arrival.</p>
             </div>
 
             <div class="dossier-section">
                 <div class="dossier-label">Startup Demand</div>
                 <div style="font-size:1.5rem; color:#c0392b; font-weight:bold;">$${c.startupAsk.toLocaleString()}</div>
-                <div style="font-size:0.8rem; color:#666;">Includes instrument costs and 2 years of personnel.</div>
             </div>
 
             <div style="margin-top:30px;">
                 ${actionArea}
             </div>
         </div>`;
-    }
+    },
+    // --- PASTE THIS AT THE BOTTOM OF THE UI OBJECT in js/ui.js ---
+
+    // 1. The Tenure Dossier (For the "View Dossier" button on Assistant Profs)
+    viewTenureDossier: function(id) {
+        const f = State.data.faculty.find(x => x.id === id);
+        if(!f || !f.tenureTrack) return;
+        
+        const tt = f.tenureTrack;
+        
+        // Calculate Trajectory
+        const pubsPerYear = tt.year > 0 ? (tt.stats.totalPubs / tt.year).toFixed(1) : "0.0";
+        let status = "On Track";
+        let statusColor = "#27ae60"; // Green
+        if(pubsPerYear < 1.0) { status = "At Risk"; statusColor = "#e74c3c"; } // Red
+        else if(pubsPerYear < 2.0) { status = "Borderline"; statusColor = "#f39c12"; } // Orange
+
+        // Create History Rows
+        const historyRows = tt.history.map(h => `
+            <div style="display:flex; border-bottom:1px solid #eee; padding:5px 0; font-size:0.85rem;">
+                <div style="width:50px;">Yr ${h.year}</div>
+                <div style="flex:1;">H-Index: ${h.hIndex}</div>
+                <div style="flex:1;">Cum. Pubs: ${h.pubs}</div>
+            </div>`).join('');
+
+        const overlay = document.createElement('div');
+        overlay.className = 'dossier-overlay';
+        overlay.innerHTML = `
+            <div class="dossier-paper" style="width:700px; max-height:90vh; overflow-y:auto;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #333; padding-bottom:15px; margin-bottom:20px;">
+                    <div>
+                        <div style="font-size:0.9rem; text-transform:uppercase; color:#666; letter-spacing:1px;">Tenure & Promotion Dossier</div>
+                        <h1 style="margin:5px 0; font-family:'Georgia', serif;">${f.name}</h1>
+                        <div style="font-size:1.1rem; color:#2c3e50;">${f.field} Chemistry</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:3rem; font-weight:bold; color:${statusColor}; line-height:1;">${tt.year}<span style="font-size:1rem; color:#999; font-weight:normal;">/6</span></div>
+                        <div style="font-size:0.8rem; color:#666;">YEARS COMPLETED</div>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:30px;">
+                    <div style="background:#f8f9fa; padding:20px; border:1px solid #e9ecef;">
+                        <h3 style="margin-top:0; border-bottom:1px solid #ddd; padding-bottom:5px;">Research Output</h3>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:15px;">
+                            <div>
+                                <div style="font-size:2rem; font-weight:bold; color:#2c3e50;">${tt.stats.totalPubs}</div>
+                                <div style="font-size:0.8rem; color:#666;">Total Publications</div>
+                            </div>
+                            <div>
+                                <div style="font-size:2rem; font-weight:bold; color:#2c3e50;">${pubsPerYear}</div>
+                                <div style="font-size:0.8rem; color:#666;">Avg Pubs/Year</div>
+                            </div>
+                        </div>
+                        
+                        <h3 style="margin-top:20px; border-bottom:1px solid #ddd; padding-bottom:5px;">Funding Secured</h3>
+                        <div style="font-size:2rem; font-weight:bold; color:#27ae60;">$${tt.stats.totalGrants.toLocaleString()}</div>
+                        <div style="font-size:0.8rem; color:#666;">Total Grant Revenue</div>
+                    </div>
+
+                    <div>
+                        <h3 style="margin-top:0; border-bottom:1px solid #ddd; padding-bottom:5px;">Mentorship</h3>
+                        <ul style="list-style:none; padding:0; line-height:2;">
+                            <li><strong>Current Lab Size:</strong> ${f.students.length} Students</li>
+                            <li><strong>Recruited (Total):</strong> ${tt.stats.studentsRecruited || f.students.length} Students</li>
+                            <li><strong>Graduated:</strong> ${tt.stats.studentsGraduated || 0} PhDs</li>
+                        </ul>
+
+                        <div style="margin-top:20px; padding:15px; background:${statusColor}20; border-left:4px solid ${statusColor};">
+                            <strong>Committee Projection:</strong> ${status}
+                            <p style="font-size:0.85rem; margin:5px 0 0 0;">
+                                To secure tenure, the candidate needs to maintain funding and publish ~2 papers/year.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="border-bottom:1px solid #ddd; padding-bottom:5px;">Annual Progress History</h3>
+                <div style="background:white; border:1px solid #eee; padding:10px;">
+                    <div style="display:flex; font-weight:bold; color:#999; font-size:0.8rem; padding-bottom:5px;">
+                        <div style="width:50px;">Year</div>
+                        <div style="flex:1;">H-Index Growth</div>
+                        <div style="flex:1;">Publications</div>
+                    </div>
+                    ${historyRows}
+                    ${historyRows.length === 0 ? '<div style="padding:10px; color:#999;">No history yet.</div>' : ''}
+                </div>
+
+                <div style="margin-top:30px; text-align:right;">
+                    <button class="btn-main" onclick="document.querySelector('.dossier-overlay').remove()">Close Dossier</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    },
+
+    // 2. The Faculty Detail (For clicking the Name of ANY professor)
+    viewFacultyDetail: function(id) {
+        const f = State.data.faculty.find(x => x.id === id);
+        if(!f) return;
+
+        // Get Students
+        const students = State.data.students.filter(s => s.advisorId === id);
+        
+        // Sort students: RA first, then TA, then Fellow
+        students.sort((a,b) => {
+            if(a.funding === 'RA' && b.funding !== 'RA') return -1;
+            if(a.funding !== 'RA' && b.funding === 'RA') return 1;
+            return b.year - a.year; // Then by seniority
+        });
+
+        const studentRows = students.map(s => {
+            let badgeColor = "#7f8c8d";
+            if(s.funding === "RA") badgeColor = "#27ae60"; // Green
+            if(s.funding === "TA") badgeColor = "#c0392b"; // Red
+            if(s.funding === "Fellowship") badgeColor = "#f1c40f"; // Gold
+
+            return `
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding:8px 0; align-items:center;">
+                <div>
+                    <div style="font-weight:bold;">${s.name.split(' (')[0]}</div>
+                    <div style="font-size:0.8rem; color:#666;">Year ${s.year} Candidate</div>
+                </div>
+                <div style="text-align:right;">
+                    <span style="background:${badgeColor}; color:white; padding:2px 6px; border-radius:4px; font-size:0.75rem; font-weight:bold;">${s.funding}</span>
+                    <div style="font-size:0.75rem; color:#999; margin-top:2px;">
+                        🧠 ${s.stats.brains} | ✋ ${s.stats.hands}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+        const overlay = document.createElement('div');
+        overlay.className = 'dossier-overlay'; // Reuse the existing overlay CSS
+        overlay.innerHTML = `
+            <div class="dossier-paper" style="width:600px; max-height:90vh; overflow-y:auto;">
+                <div style="border-bottom:2px solid #2c3e50; padding-bottom:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="margin:0; color:#2c3e50;">${f.name}</h2>
+                    <span style="background:#eee; padding:4px 8px; border-radius:4px;">${f.field} Lab</span>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:20px; text-align:center;">
+                    <div style="background:#f8f9fa; padding:10px; border:1px solid #ddd; border-radius:5px;">
+                        <div style="font-size:0.8rem; color:#666; text-transform:uppercase;">Reserves</div>
+                        <div style="font-size:1.2rem; font-weight:bold; color:#2c3e50;">$${f.funds.toLocaleString()}</div>
+                    </div>
+                    <div style="background:#f8f9fa; padding:10px; border:1px solid #ddd; border-radius:5px;">
+                        <div style="font-size:0.8rem; color:#666; text-transform:uppercase;">Burn Rate</div>
+                        <div style="font-size:1.2rem; font-weight:bold; color:#c0392b;">$${(f.burnRate/4.3).toFixed(0)}/wk</div>
+                    </div>
+                    <div style="background:#f8f9fa; padding:10px; border:1px solid #ddd; border-radius:5px;">
+                        <div style="font-size:0.8rem; color:#666; text-transform:uppercase;">Runway</div>
+                        <div style="font-size:1.2rem; font-weight:bold; color:${f.runway.includes('0.0') ? '#e74c3c' : '#27ae60'};">${f.runway}</div>
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom:10px; border-bottom:1px solid #ddd;">Lab Roster (${students.length})</h3>
+                <div style="max-height:300px; overflow-y:auto; background:white; padding:10px; border:1px solid #eee;">
+                    ${studentRows.length > 0 ? studentRows : '<div style="color:#999; text-align:center;">No students currently in lab.</div>'}
+                </div>
+
+                <div style="margin-top:20px; text-align:right;">
+                    <button class="btn-main" onclick="document.querySelector('.dossier-overlay').remove()">Close Details</button>
+                </div>
+            </div>`;
+            
+        document.body.appendChild(overlay);
+    },
 };

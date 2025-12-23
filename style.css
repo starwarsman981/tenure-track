@@ -12,7 +12,50 @@
 	--font-header: 'Georgia', serif;
 	--font-body: 'Helvetica Neue', sans-serif;
 }
+/* --- FACULTY GRID LAYOUT --- */
+.faculty-grid {
+    display: grid;
+    /* This creates responsive columns that are at least 300px wide */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
 
+/* --- CARD STYLING --- */
+.faculty-card {
+    background: #ffffff;
+    border: 1px solid #e1e4e8;
+    border-radius: 8px; /* Rounded corners */
+    padding: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03); /* Subtle shadow */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.faculty-card:hover {
+    transform: translateY(-3px); /* Lift effect on hover */
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+}
+
+/* Filter Bar Styling */
+.filter-bar {
+    background: #f8f9fa;
+    padding: 10px 20px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.filter-bar select {
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+}
 body {
 	margin: 0;
 	background-color: var(--bg-dark);
