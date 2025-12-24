@@ -4,7 +4,7 @@ const Game = {
     currentSpeed: 0, 
     SPEEDS: { 0: null, 1: 2000, 2: 1000, 3: 250 },
     viewState: { mode: 'month', year: 2025, month: 7, day: 1 },
-    rosterFilters: { rank: 'all', field: 'all', tenure: 'all', sort: 'hIndex' },
+    rosterFilters: { rank: 'all', field: 'all', tenure: 'all', sort: 'name' },
     // Add these two lines to the Game object:
     emailFilter: 'all',
     emailSearchQuery: '', // <--- NEW STATE
@@ -56,6 +56,8 @@ const Game = {
         this.setSpeed(0); 
     },
 
+    /* js/main.js */
+
     tick: function() {
         const oldMonth = State.data.month;
         State.advanceDay();
@@ -67,10 +69,25 @@ const Game = {
             this.viewState.day = 1;
         }
 
+        // Existing screen updates
         const calScreen = document.getElementById('screen-calendar');
         if (!calScreen.classList.contains('hidden')) UI.renderCalendar(State.data, this.viewState);
         if (!document.getElementById('screen-finance').classList.contains('hidden')) UI.renderFinance(State.data, this.financeTab);
         if (!document.getElementById('screen-admissions').classList.contains('hidden')) UI.renderAdmissions(State.data);
+
+        // --- NEW: Dynamic Faculty Updates ---
+        // 1. Update Roster Grid if active
+        if (!document.getElementById('screen-faculty').classList.contains('hidden')) {
+            UI.renderFaculty(State.data.faculty, this.rosterFilters);
+        }
+
+        // 2. Update Detail Modal if active
+        // We look for the specific overlay ID we added in ui.js
+        const activeModal = document.getElementById('modal-faculty-detail');
+        if(activeModal) {
+            const facId = parseFloat(activeModal.getAttribute('data-fac-id'));
+            if(facId) UI.refreshFacultyModal(facId);
+        }
     },
     
     resolveEvent: function(choiceIdx) {

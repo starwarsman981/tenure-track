@@ -1319,79 +1319,179 @@ renderRecords: function(data) {
     /* js/ui.js */
 
     viewFacultyDetail: function(id) {
+        // This line is the key! It forces the new logic to run.
+        this.refreshFacultyModal(id, true);
+    },
+    /* js/ui.js */
+
+    /* js/ui.js */
+
+    /* js/ui.js */
+
+    /* js/ui.js */
+
+    /* js/ui.js */
+
+    refreshFacultyModal: function(id, createNew = false) {
         const f = State.data.faculty.find(x => x.id === id);
         if(!f) return;
 
-        // Get Students
+        // Force Math Update (uses the new Stable Random logic)
+        if(State.recalcFacultyFinances) State.recalcFacultyFinances(f);
+
+        // -- DATA PREP --
         const students = State.data.students.filter(s => s.advisorId === id);
-        
-        // Sort students: RA first, then TA, then Fellow, then by Year
         students.sort((a,b) => {
             if(a.funding === 'RA' && b.funding !== 'RA') return -1;
             if(a.funding !== 'RA' && b.funding === 'RA') return 1;
             return b.year - a.year; 
         });
 
+        // -- HTML: EXPENSES BREAKDOWN --
+        let breakdownHtml = '<div style="color:#999; font-style:italic;">No active expenses.</div>';
+        if (f.burnBreakdown) {
+            breakdownHtml = f.burnBreakdown.split('\n').map(line => {
+                const label = line.split(':')[0];
+                const val = line.split(':')[1] || '';
+                return `<div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding:2px 0;">
+                            <span>${label}</span>
+                            <span style="font-weight:bold;">${val}</span>
+                        </div>`;
+            }).join('');
+        }
+
+        // -- HTML: COMPACT GRANT LIST --
+        let grantHtml = '<div style="color:#999; font-style:italic; font-size:0.8rem;">No active grants.</div>';
+        if(f.grants && f.grants.length > 0) {
+            grantHtml = f.grants.map(g => `
+                <div style="display:flex; justify-content:space-between; font-size:0.8rem; border-bottom:1px dashed #ccc; padding:2px 0;">
+                    <span style="color:#2c3e50; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60%;" title="${g.name}">${g.name}</span>
+                    <span style="font-weight:bold; color:#27ae60;">$${(g.remaining/1000).toFixed(0)}k</span>
+                </div>`).join('');
+        }
+
+        // -- HTML: COMPACT PENDING APPS --
+        let appHtml = '';
+        if(f.pendingApps && f.pendingApps.length > 0) {
+            appHtml = `<div style="margin-top:8px; border-top:1px solid #eee; padding-top:4px;">
+                <div style="font-size:0.7rem; color:#f39c12; font-weight:bold; margin-bottom:2px;">PENDING</div>
+                ${f.pendingApps.map(a => `
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#666;">
+                        <span>${a.agency} ($${(a.amount/1000).toFixed(0)}k)</span>
+                        <span>${a.weeksToDecision - a.weeksPending}w</span>
+                    </div>
+                `).join('')}
+            </div>`;
+        }
+
+        // -- LIVE UPDATE LOGIC --
+        const existingOverlay = document.getElementById('modal-faculty-detail');
+        if (!createNew && existingOverlay && existingOverlay.getAttribute('data-fac-id') == id) {
+            
+            // Stats
+            const elReserves = document.getElementById('live-fac-reserves');
+            if(elReserves) elReserves.innerText = "$" + f.funds.toLocaleString();
+            
+            const elBurn = document.getElementById('live-fac-burn');
+            if(elBurn) elBurn.innerText = "$" + (f.burnRate/4.3).toFixed(0) + "/wk";
+            
+            const elRunway = document.getElementById('live-fac-runway');
+            if(elRunway) {
+                elRunway.innerText = f.runway;
+                elRunway.style.color = f.runway.includes('0.0') ? '#e74c3c' : '#27ae60';
+            }
+
+            // HTML Blocks
+            const elBreakdown = document.getElementById('live-burn-breakdown');
+            if(elBreakdown) elBreakdown.innerHTML = breakdownHtml;
+
+            const elGrants = document.getElementById('live-grant-list');
+            if(elGrants) elGrants.innerHTML = grantHtml + appHtml;
+
+            return; 
+        }
+
+        // -- HTML GENERATION (Structure) --
         const studentRows = students.map(s => {
             let badgeColor = "#7f8c8d";
-            if(s.funding === "RA") badgeColor = "#27ae60"; // Green
-            if(s.funding === "TA") badgeColor = "#c0392b"; // Red
-            if(s.funding === "Fellowship") badgeColor = "#f1c40f"; // Gold
-
-            // --- THE FIX ---
-            // Define the title based on year (3+ is Candidate, 1-2 is Student)
+            if(s.funding === "RA") badgeColor = "#27ae60"; 
+            if(s.funding === "TA") badgeColor = "#c0392b"; 
+            if(s.funding === "Fellowship") badgeColor = "#f1c40f"; 
             const title = s.year > 2 ? "Candidate" : "Student";
-            // ---------------
 
             return `
-            <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding:8px 0; align-items:center;">
+            <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding:6px 0; align-items:center;">
                 <div>
-                    <div style="font-weight:bold;">${s.name.split(' (')[0]}</div>
-                    <div style="font-size:0.8rem; color:#666;">Year ${s.year} ${title}</div>
+                    <div style="font-weight:bold; font-size:0.9rem;">${s.name.split(' (')[0]}</div>
+                    <div style="font-size:0.75rem; color:#666;">Yr ${s.year} ${title}</div>
                 </div>
                 <div style="text-align:right;">
-                    <span style="background:${badgeColor}; color:white; padding:2px 6px; border-radius:4px; font-size:0.75rem; font-weight:bold;">${s.funding}</span>
-                    <div style="font-size:0.75rem; color:#999; margin-top:2px;">
-                        🧠 ${s.stats.brains} | ✋ ${s.stats.hands}
+                    <span style="background:${badgeColor}; color:white; padding:1px 5px; border-radius:3px; font-size:0.7rem; font-weight:bold;">${s.funding}</span>
+                    <div style="font-size:0.7rem; color:#999; margin-top:1px;">
+                        🧠${s.stats.brains} ✋${s.stats.hands}
                     </div>
                 </div>
             </div>`;
         }).join('');
 
-        const overlay = document.createElement('div');
-        overlay.className = 'dossier-overlay'; 
-        overlay.innerHTML = `
-            <div class="dossier-paper" style="width:600px; max-height:90vh; overflow-y:auto;">
-                <div style="border-bottom:2px solid #2c3e50; padding-bottom:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+        const htmlContent = `
+            <div class="dossier-paper" style="width:650px; max-height:90vh; overflow-y:auto; font-family:'Helvetica Neue', sans-serif;">
+                <div style="border-bottom:2px solid #2c3e50; padding-bottom:10px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
                     <h2 style="margin:0; color:#2c3e50;">${f.name}</h2>
-                    <span style="background:#eee; padding:4px 8px; border-radius:4px;">${f.field} Lab</span>
+                    <span style="background:#eee; padding:4px 8px; border-radius:4px; font-size:0.9rem;">${f.field} Lab</span>
                 </div>
 
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:20px; text-align:center;">
-                    <div style="background:#f8f9fa; padding:10px; border:1px solid #ddd; border-radius:5px;">
-                        <div style="font-size:0.8rem; color:#666; text-transform:uppercase;">Reserves</div>
-                        <div style="font-size:1.2rem; font-weight:bold; color:#2c3e50;">$${f.funds.toLocaleString()}</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px; text-align:center;">
+                    <div style="background:#f8f9fa; padding:8px; border:1px solid #ddd; border-radius:5px;">
+                        <div style="font-size:0.75rem; color:#666; text-transform:uppercase;">Reserves</div>
+                        <div id="live-fac-reserves" style="font-size:1.1rem; font-weight:bold; color:#2c3e50;">$${f.funds.toLocaleString()}</div>
                     </div>
-                    <div style="background:#f8f9fa; padding:10px; border:1px solid #ddd; border-radius:5px;">
-                        <div style="font-size:0.8rem; color:#666; text-transform:uppercase;">Burn Rate</div>
-                        <div style="font-size:1.2rem; font-weight:bold; color:#c0392b;">$${(f.burnRate/4.3).toFixed(0)}/wk</div>
+                    <div style="background:#f8f9fa; padding:8px; border:1px solid #ddd; border-radius:5px;">
+                        <div style="font-size:0.75rem; color:#666; text-transform:uppercase;">Burn Rate</div>
+                        <div id="live-fac-burn" style="font-size:1.1rem; font-weight:bold; color:#c0392b;">$${(f.burnRate/4.3).toFixed(0)}/wk</div>
                     </div>
-                    <div style="background:#f8f9fa; padding:10px; border:1px solid #ddd; border-radius:5px;">
-                        <div style="font-size:0.8rem; color:#666; text-transform:uppercase;">Runway</div>
-                        <div style="font-size:1.2rem; font-weight:bold; color:${f.runway.includes('0.0') ? '#e74c3c' : '#27ae60'};">${f.runway}</div>
+                    <div style="background:#f8f9fa; padding:8px; border:1px solid #ddd; border-radius:5px;">
+                        <div style="font-size:0.75rem; color:#666; text-transform:uppercase;">Runway</div>
+                        <div id="live-fac-runway" style="font-size:1.1rem; font-weight:bold; color:${f.runway.includes('0.0') ? '#e74c3c' : '#27ae60'};">${f.runway}</div>
                     </div>
                 </div>
 
-                <h3 style="margin-bottom:10px; border-bottom:1px solid #ddd;">Lab Roster (${students.length})</h3>
-                <div style="max-height:300px; overflow-y:auto; background:white; padding:10px; border:1px solid #eee;">
+                <div style="display:flex; gap:15px; margin-bottom:15px;">
+                    
+                    <div style="flex:1; background:#f0fcf4; border:1px solid #2ecc71; border-radius:5px; padding:12px;">
+                        <h4 style="margin-top:0; margin-bottom:8px; color:#27ae60; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid #c3e6cb; padding-bottom:4px;">Funding Sources</h4>
+                        <div id="live-grant-list">
+                            ${grantHtml}
+                            ${appHtml}
+                        </div>
+                    </div>
+
+                    <div style="flex:1; background:#fff5f5; border:1px solid #feb2b2; border-radius:5px; padding:12px;">
+                        <h4 style="margin-top:0; margin-bottom:8px; color:#c0392b; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid #fecaca; padding-bottom:4px;">Weekly Expenses</h4>
+                        <div id="live-burn-breakdown" style="font-size:0.85rem; color:#444;">
+                            ${breakdownHtml}
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom:8px; border-bottom:1px solid #ddd; font-size:1rem;">Lab Roster (${students.length})</h3>
+                <div style="max-height:250px; overflow-y:auto; background:white; padding:10px; border:1px solid #eee;">
                     ${studentRows.length > 0 ? studentRows : '<div style="color:#999; text-align:center;">No students currently in lab.</div>'}
                 </div>
 
-                <div style="margin-top:20px; text-align:right;">
-                    <button class="btn-main" onclick="document.querySelector('.dossier-overlay').remove()">Close Details</button>
+                <div style="margin-top:15px; text-align:right;">
+                    <button class="btn-main" onclick="document.getElementById('modal-faculty-detail').remove()">Close Details</button>
                 </div>
             </div>`;
-            
+
+        const existing = document.getElementById('modal-faculty-detail');
+        if(existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'dossier-overlay';
+        overlay.id = 'modal-faculty-detail';
+        overlay.setAttribute('data-fac-id', id);
+        overlay.innerHTML = htmlContent;
         document.body.appendChild(overlay);
-    },
+    }
 };

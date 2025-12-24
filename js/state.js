@@ -163,7 +163,6 @@ const State = {
             this.processWeeklyFinances();
             this.processGrantCycle();
             this.processMorale();
-            this.processRandomEvents();
             this.updateCitations();
         }
         this.processResearchOutput();
@@ -585,17 +584,73 @@ processWeeklyFinances: function() {
     this.data.finance.history.push(this.data.budget);
 },
 
+    /* js/state.js */
+
+    /* js/state.js */
+
     recalcFacultyFinances: function(prof) {
+        // Debug line to prove new code is running
+        console.log(`Calculating Variable Costs for ${prof.name}...`);
+
         let weeklyBurn = this.COSTS.LAB_BASE;
         const myStudents = this.data.students.filter(s => s.advisorId === prof.id);
         const pol = this.data.policy; 
+        
+        let suppliesCost = 0;
+        let raCost = 0;
+        let raCount = 0;
+        let taCount = 0;
+        let fellowCount = 0;
+
         myStudents.forEach(s => {
-            weeklyBurn += this.COSTS.SUPPLIES_WEEKLY;
-            if(s.funding === "RA") weeklyBurn += (this.COSTS.RA_WEEKLY * pol.stipendMod);
+            // --- VARIABLE COST LOGIC ---
+            // 1. Generate a stable seed based on Student ID + Day
+            // This ensures the number changes daily, but doesn't flicker if you hover
+            const seed = (s.id || 0) + (this.data.day * 100) + (this.data.year * 1000);
+            const pseudoRand = Math.abs(Math.sin(seed) * 10000) % 1; 
+            
+            // 2. Set Cost: Min $350, Max $750. 
+            // Note: We deliberately IGNORE this.COSTS.SUPPLIES_WEEKLY (which is 300)
+            const chemCost = 350 + Math.floor(pseudoRand * 401); 
+
+            suppliesCost += chemCost;
+            weeklyBurn += chemCost;
+            
+            if(s.funding === "RA") {
+                const stip = (this.COSTS.RA_WEEKLY * pol.stipendMod);
+                weeklyBurn += stip;
+                raCost += stip;
+                raCount++;
+            } else if (s.funding === "TA") {
+                taCount++;
+            } else {
+                fellowCount++;
+            }
         });
+
+        // Store Monthly Burn
         prof.burnRate = weeklyBurn * 4.3; 
+        
+        // Build Breakdown String
+        let parts = [];
+        parts.push(`Lab Maintenance: $${this.COSTS.LAB_BASE}`);
+        
+        if(suppliesCost > 0) {
+            const avg = Math.round(suppliesCost / myStudents.length);
+            // We explicitly show the average here so you can verify it's > 300
+            parts.push(`Chemicals (Variable): $${suppliesCost} (Avg $${avg}/student)`);
+        }
+        
+        if(raCost > 0) parts.push(`RA Stipends: $${raCost.toFixed(0)} (${raCount} students)`);
+        if(taCount > 0) parts.push(`TA Support: ${taCount} (Paid by Dept)`);
+        if(fellowCount > 0) parts.push(`Fellowships: ${fellowCount} (Free)`);
+        
+        prof.burnBreakdown = parts.join('\n');
+
+        // Update Reserves & Runway
         const totalFunds = prof.grants.reduce((sum, g) => sum + g.remaining, 0);
         prof.funds = totalFunds;
+        
         if(weeklyBurn > 0) {
             const weeksLeft = totalFunds / weeklyBurn;
             if(weeksLeft > 104) prof.runway = "> 2 yrs";
@@ -1363,5 +1418,81 @@ const FacultyGenerator = {
             happiness: 80
         };
     },
-    recalcFinances: function(prof, allStudents) {}
+    /* js/state.js */
+
+    /* js/state.js */
+
+    /* js/state.js */
+
+    /* js/state.js */
+
+    recalcFacultyFinances: function(prof) {
+        // Debug line to prove new code is running
+        console.log(`Calculating Variable Costs for ${prof.name}...`);
+
+        let weeklyBurn = this.COSTS.LAB_BASE;
+        const myStudents = this.data.students.filter(s => s.advisorId === prof.id);
+        const pol = this.data.policy; 
+        
+        let suppliesCost = 0;
+        let raCost = 0;
+        let raCount = 0;
+        let taCount = 0;
+        let fellowCount = 0;
+
+        myStudents.forEach(s => {
+            // --- VARIABLE COST LOGIC ---
+            // 1. Generate a stable seed based on Student ID + Day
+            // This ensures the number changes daily, but doesn't flicker if you hover
+            const seed = (s.id || 0) + (this.data.day * 100) + (this.data.year * 1000);
+            const pseudoRand = Math.abs(Math.sin(seed) * 10000) % 1; 
+            
+            // 2. Set Cost: Min $350, Max $750. 
+            // Note: We deliberately IGNORE this.COSTS.SUPPLIES_WEEKLY (which is 300)
+            const chemCost = 350 + Math.floor(pseudoRand * 401); 
+
+            suppliesCost += chemCost;
+            weeklyBurn += chemCost;
+            
+            if(s.funding === "RA") {
+                const stip = (this.COSTS.RA_WEEKLY * pol.stipendMod);
+                weeklyBurn += stip;
+                raCost += stip;
+                raCount++;
+            } else if (s.funding === "TA") {
+                taCount++;
+            } else {
+                fellowCount++;
+            }
+        });
+
+        // Store Monthly Burn
+        prof.burnRate = weeklyBurn * 4.3; 
+        
+        // Build Breakdown String
+        let parts = [];
+        parts.push(`Lab Maintenance: $${this.COSTS.LAB_BASE}`);
+        
+        if(suppliesCost > 0) {
+            const avg = Math.round(suppliesCost / myStudents.length);
+            // We explicitly show the average here so you can verify it's > 300
+            parts.push(`Chemicals (Variable): $${suppliesCost} (Avg $${avg}/student)`);
+        }
+        
+        if(raCost > 0) parts.push(`RA Stipends: $${raCost.toFixed(0)} (${raCount} students)`);
+        if(taCount > 0) parts.push(`TA Support: ${taCount} (Paid by Dept)`);
+        if(fellowCount > 0) parts.push(`Fellowships: ${fellowCount} (Free)`);
+        
+        prof.burnBreakdown = parts.join('\n');
+
+        // Update Reserves & Runway
+        const totalFunds = prof.grants.reduce((sum, g) => sum + g.remaining, 0);
+        prof.funds = totalFunds;
+        
+        if(weeklyBurn > 0) {
+            const weeksLeft = totalFunds / weeklyBurn;
+            if(weeksLeft > 104) prof.runway = "> 2 yrs";
+            else prof.runway = (weeksLeft / 4.3).toFixed(1) + " mo";
+        } else { prof.runway = "Stable"; }
+    },
 };
