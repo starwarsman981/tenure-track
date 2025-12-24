@@ -504,8 +504,8 @@ const UI = {
                     ${tenureSection}
 
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; font-size:0.85rem; background:#fafafa; padding:8px; border-radius:4px;">
-                        <div>🧪 H-Index: <strong>${f.hIndex}</strong></div>
-                        <div>💰 $${(f.funds/1000).toFixed(0)}k</div>
+                        <div>🧪 h-index: <strong>${f.hIndex}</strong></div>
+                        <div>💰 Reserves: ${(f.funds/1000).toFixed(0)}k</div>
                         <div>👥 Grads: <strong>${f.students.length}</strong></div>
                         <div>⚡ Morale: <strong>${Math.round(f.happiness)}%</strong></div>
                     </div>
@@ -551,160 +551,212 @@ const UI = {
         document.body.appendChild(overlay); 
     },
 
-    renderAdmissions: function(data) {
-        const existingList = document.getElementById('adm-list-container');
-        let scrollPos = 0; if(existingList) scrollPos = existingList.scrollTop;
-        const container = this.elements.screens.admissions; const adm = data.admissions;
+    /* js/ui.js */
 
-        if (!adm.pool || adm.pool.length === 0) {
-            let status = "Admissions Cycle"; let subtext = "";
-            if (data.month === 7 && data.day < 15) { status = "Pre-Season"; subtext = "Recruitment Strategy meeting is on Aug 15."; } 
-            else if (!adm.setupComplete) { status = "Strategy Needed"; subtext = "Check your email to set the recruitment strategy."; } 
-            else { status = "Recruitment Active"; subtext = `Target Cohort: ${adm.targetSize} Students. Applications arrive Dec 1.`; }
-            container.innerHTML = `<div class="empty-state"><h2>${status}</h2><p>${subtext}</p></div>`; return;
-        }
+    /* js/ui.js */
 
-        let displayPool = adm.pool;
-        const f = Game.admissionsFilters;
-        if(f.field !== 'all') displayPool = displayPool.filter(a => a.interest === f.field);
-        if(f.gpa !== 'all') {
-            if(f.gpa === 'high') displayPool = displayPool.filter(a => parseFloat(a.application.gpa) >= 3.8);
-            if(f.gpa === 'mid') displayPool = displayPool.filter(a => parseFloat(a.application.gpa) >= 3.3 && parseFloat(a.application.gpa) < 3.8);
-            if(f.gpa === 'low') displayPool = displayPool.filter(a => parseFloat(a.application.gpa) < 3.3);
-        }
-        if(f.rec !== 'all') {
-            if(f.rec === 'strong') displayPool = displayPool.filter(a => a.application.recScore >= 8);
-            if(f.rec === 'avg') displayPool = displayPool.filter(a => a.application.recScore >= 5 && a.application.recScore < 8);
-            if(f.rec === 'weak') displayPool = displayPool.filter(a => a.application.recScore < 5);
-        }
+    /* js/ui.js */
 
-        const offersCount = adm.pool.filter(a => a.status === "Offer Extended" || a.status === "Accepted").length;
-        const targetOffers = Math.ceil(adm.targetSize * 1.5);
-        const offersPercent = Math.min(100, (offersCount / targetOffers) * 100);
+    /* js/ui.js */
 
-        container.innerHTML = `
-        <div class="outlook-layout">
-            <div class="email-list-pane">
-                <div style="background:#2c3e50; color:white; padding:10px; font-size:0.8rem;">
-                    <div>Offers Extended: <strong>${offersCount}</strong> / Target: <strong>${targetOffers}</strong></div>
-                    <div style="background:rgba(255,255,255,0.2); height:5px; margin-top:5px; border-radius:3px;">
-                        <div style="width:${offersPercent}%; background:#2ecc71; height:100%; border-radius:3px;"></div>
-                    </div>
-                </div>
-                <div class="outlook-header" style="flex-wrap:wrap; gap:5px; padding:5px;">
-                    <select onchange="Game.setAdmissionsFilter('field', this.value)" style="font-size:0.75rem; flex:1;">
-                        <option value="all" ${f.field==='all'?'selected':''}>Field: All</option>
-                        <option value="Organic" ${f.field==='Organic'?'selected':''}>Organic</option>
-                        <option value="Inorganic" ${f.field==='Inorganic'?'selected':''}>Inorganic</option>
-                        <option value="Physical" ${f.field==='Physical'?'selected':''}>Physical</option>
-                        <option value="Analytical" ${f.field==='Analytical'?'selected':''}>Analytical</option>
-                        <option value="Materials" ${f.field==='Materials'?'selected':''}>Materials</option>
-                        <option value="Biological" ${f.field==='Biological'?'selected':''}>Biological</option>
-                    </select>
-                    <select onchange="Game.setAdmissionsFilter('gpa', this.value)" style="font-size:0.75rem; flex:1;">
-                        <option value="all" ${f.gpa==='all'?'selected':''}>GPA: All</option>
-                        <option value="high" ${f.gpa==='high'?'selected':''}>High (3.8+)</option>
-                        <option value="mid" ${f.gpa==='mid'?'selected':''}>Mid (3.3+)</option>
-                        <option value="low" ${f.gpa==='low'?'selected':''}>Low</option>
-                    </select>
-                    <select onchange="Game.setAdmissionsFilter('rec', this.value)" style="font-size:0.75rem; flex:1;">
-                        <option value="all" ${f.rec==='all'?'selected':''}>Rec: All</option>
-                        <option value="strong" ${f.rec==='strong'?'selected':''}>Strong (8+)</option>
-                        <option value="avg" ${f.rec==='avg'?'selected':''}>Avg (5-7)</option>
-                        <option value="weak" ${f.rec==='weak'?'selected':''}>Weak</option>
-                    </select>
-                </div>
-                <div class="email-list-scroll" id="adm-list-container"></div>
-            </div>
-            <div class="email-view-pane" id="adm-detail-container"><div class="empty-state">Select an applicant.</div></div>
-        </div>`;
+/* js/ui.js */
+
+    /* js/ui.js */
+
+    /* js/ui.js */
+
+renderAdmissions: function(data) {
+    const screen = document.getElementById('screen-admissions');
+    if(!screen || screen.classList.contains('hidden')) return;
+
+    // 1. DASHBOARD
+    const dashboard = document.getElementById('admissions-dashboard');
+    if(dashboard && data.admissions.active) {
+        const pool = data.admissions.pool;
+        const target = data.admissions.targetSize || 7;
+        const accepted = pool.filter(a => a.status === 'Accepted').length;
+        const pending = pool.filter(a => a.status === 'Offer Extended').length;
+        const declined = pool.filter(a => a.status === 'Declined').length;
+        const totalOffers = accepted + pending + declined;
+        const rejectionRate = totalOffers > 0 ? Math.round((declined / totalOffers) * 100) : 0;
+        const yieldRate = totalOffers > 0 ? Math.round((accepted / totalOffers) * 100) : 0;
+        const filledPct = Math.min(100, (accepted / target) * 100);
+        const pendingPct = Math.min(100, (pending / target) * 100);
         
-        const listContainer = document.getElementById('adm-list-container');
-        const detailContainer = document.getElementById('adm-detail-container');
+        dashboard.innerHTML = `
+            <div style="flex:2; border-right:1px solid #ccc; padding-right:15px; margin-right:15px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:5px; font-weight:bold; color:#2c3e50;">
+                    <span>Cohort Progress</span><span>${accepted} / ${target} Seats</span>
+                </div>
+                <div style="height:14px; background:#e0e0e0; border-radius:7px; overflow:hidden; position:relative;">
+                    <div style="width:${filledPct}%; background:#27ae60; height:100%; float:left;" title="Accepted"></div>
+                    <div style="width:${pendingPct}%; background:#f1c40f; height:100%; float:left;" title="Offers Pending"></div>
+                    <div style="position:absolute; left:${Math.min(100, (target/target)*100)}%; top:0; bottom:0; width:2px; background:rgba(0,0,0,0.2);"></div>
+                </div>
+            </div>
+            <div style="flex:1; display:flex; justify-content:space-between; text-align:center; font-size:0.85rem;">
+                <div><div style="font-weight:bold; font-size:1.1rem; color:#2c3e50;">${totalOffers}</div><div style="font-size:0.7rem; color:#7f8c8d;">OFFERS</div></div>
+                <div><div style="font-weight:bold; font-size:1.1rem; color:${rejectionRate > 50 ? '#c0392b' : '#2c3e50'};">${rejectionRate}%</div><div style="font-size:0.7rem; color:#7f8c8d;">REJECTION</div></div>
+                <div><div style="font-weight:bold; font-size:1.1rem; color:#27ae60;">${yieldRate}%</div><div style="font-size:0.7rem; color:#7f8c8d;">YIELD</div></div>
+            </div>`;
+    } else if (dashboard) { dashboard.innerHTML = "Admissions Closed."; }
 
-        displayPool.forEach(app => {
-            const item = document.createElement('div'); item.className = 'email-item'; 
-            if (adm.selectedApplicantId === app.id) item.classList.add('active');
-            item.onclick = () => { adm.selectedApplicantId = app.id; UI.renderAdmissions(data); };
+    const container = document.getElementById('admissions-pool-container');
+    container.innerHTML = '';
+
+    if(!data.admissions.active) {
+        container.innerHTML = '<div style="padding:20px; text-align:center; color:#7f8c8d;">Admissions portal is closed.</div>';
+        return;
+    }
+    
+    // 2. GET FILTER VALUES
+    const fStatus = document.getElementById('adm-filter-status') ? document.getElementById('adm-filter-status').value : 'All';
+    const fInterest = document.getElementById('adm-filter-interest') ? document.getElementById('adm-filter-interest').value : 'All';
+    const fGpa = document.getElementById('adm-filter-gpa') ? document.getElementById('adm-filter-gpa').value : 'All';
+    const fSop = document.getElementById('adm-filter-sop') ? document.getElementById('adm-filter-sop').value : 'All';
+    const fRec = document.getElementById('adm-filter-rec') ? document.getElementById('adm-filter-rec').value : 'All';
+    const sortMode = document.getElementById('adm-sort') ? document.getElementById('adm-sort').value : 'default';
+
+    // 3. APPLY FILTERS & SORT
+    let displayPool = data.admissions.pool.filter(app => {
+        // Status & Interest
+        if(fStatus !== 'All' && app.status !== fStatus) return false;
+        if(fInterest !== 'All' && app.interest !== fInterest) return false;
+        
+        // GPA
+        const gpa = parseFloat(app.application.gpa);
+        if(fGpa === '3.8+' && gpa < 3.8) return false;
+        if(fGpa === '3.5+' && gpa < 3.5) return false;
+        if(fGpa === '3.0-3.5' && (gpa < 3.0 || gpa >= 3.5)) return false;
+        if(fGpa === '<3.0' && gpa >= 3.0) return false;
+
+        // SOP (Background might be null on old saves, handle safely)
+        const sop = app.background ? app.background.sopScore : 50;
+        if(fSop === '80+' && sop < 80) return false;
+        if(fSop === '50-80' && (sop < 50 || sop >= 80)) return false;
+        if(fSop === '<50' && sop >= 50) return false;
+
+        // Recs
+        const rec = app.application.recScore;
+        if(fRec === '9+' && rec < 9) return false;
+        if(fRec === '7+' && rec < 7) return false;
+        if(fRec === '<7' && rec >= 7) return false;
+
+        return true;
+    });
+
+    // Apply Sorting
+    if(sortMode === 'gpa') displayPool.sort((a,b) => b.application.gpa - a.application.gpa);
+    if(sortMode === 'rec') displayPool.sort((a,b) => b.application.recScore - a.application.recScore);
+    if(sortMode === 'exp') displayPool.sort((a,b) => (b.background ? b.background.monthsExp : 0) - (a.background ? a.background.monthsExp : 0));
+    if(sortMode === 'sop') displayPool.sort((a,b) => (b.background ? b.background.sopScore : 0) - (a.background ? a.background.sopScore : 0));
+
+    // 4. RENDER CARDS
+    displayPool.forEach(app => {
+        const card = document.createElement('div');
+        card.className = 'candidate-card';
+        const bg = app.background || { school: "Unknown", tier: 3, monthsExp: 0, prevRole: "None", sopScore: 50 };
+
+        const getSopLabel = (s) => {
+            if(s >= 90) return `<span style="color:#8e44ad; font-weight:bold;">Stellar (${s})</span>`;
+            if(s >= 75) return `<span style="color:#27ae60;">Strong (${s})</span>`;
+            if(s >= 50) return `<span style="color:#f39c12;">Average (${s})</span>`;
+            return `<span style="color:#c0392b;">Weak (${s})</span>`;
+        };
+        const schoolDisplay = bg.tier === 1 ? `<strong>⭐ ${bg.school}</strong>` : bg.school;
+        
+        // Stats Logic
+        let statsHtml = "";
+        let yieldBadge = "";
+
+        if(app.statsVisible) {
+            const chance = State.calculateYieldChance(app);
+            let chanceColor = "#e74c3c"; 
+            if(chance > 30) chanceColor = "#f1c40f"; 
+            if(chance > 60) chanceColor = "#27ae60"; 
             
-            let tags = "";
-            if(app.isInternational) tags += `<span style="background:#8e44ad; color:#fff; padding:1px 4px; font-size:0.7rem; border-radius:3px; margin-right:5px;">INTL</span>`;
-            if(app.application.hasFellowship) tags += `<span style="background:#f1c40f; color:#fff; padding:1px 4px; font-size:0.7rem; border-radius:3px; margin-right:5px;">Fellowship</span>`;
-            
-            let statusBadge = app.status;
-            if(app.status === 'Offer Extended') statusBadge = '📜 Offer Sent';
-            if(app.status === 'Accepted') statusBadge = '✅ Accepted';
-            if(app.status === 'Declined' || app.status === 'Rejected') statusBadge = '❌ Closed';
+            yieldBadge = `
+            <div style="background:#f4f6f7; border-top:1px solid #ddd; padding:5px 10px; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center;">
+                <span>Projected Yield:</span><span style="font-weight:bold; color:${chanceColor};">${chance}%</span>
+            </div>`;
 
-            item.innerHTML = `<div class="email-sender">${app.name}</div><div class="email-subject">${tags}${app.interest} | GPA: ${app.application.gpa}</div><div class="email-date">${statusBadge}</div>`;
-            listContainer.appendChild(item);
-        });
-        if(listContainer) listContainer.scrollTop = scrollPos;
-
-        if (adm.selectedApplicantId) {
-            const app = adm.pool.find(a => a.id === adm.selectedApplicantId);
-            if (app) {
-                let chatHtml = "";
-                app.interview.log.forEach(e => { chatHtml += `<div style="margin-bottom:10px; font-size:0.9rem;"><strong>${e.question}</strong><br><i>${e.answer}</i></div>`; });
-                
-                let actionsHtml = "";
-                if(app.status === 'Pending' && app.interview.points > 0 && typeof ADMISSIONS !== 'undefined') {
-                    ADMISSIONS.QUESTIONS.forEach(q => {
-                        if(!app.interview.log.find(l => l.question === q.text)) {
-                            actionsHtml += `<button class="btn-small" style="margin-right:5px; margin-bottom:5px;" onclick="Game.runInterview('${app.id}', '${q.id}')">${q.text}</button>`;
-                        }
-                    });
-                }
-
-                let statsHtml = `<div style="color:#999; font-style:italic;">Hidden (Requires Flyout/Visit)</div>`;
-                if(app.statsVisible) {
-                    let fuzzyFunc = (v) => "Unknown";
-                    if(typeof ApplicantGenerator !== 'undefined') fuzzyFunc = ApplicantGenerator.getFuzzyStat;
-                    statsHtml = `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.9rem;"><div>Brains: <strong>${fuzzyFunc(app.stats.brains)}</strong></div><div>Hands: <strong>${fuzzyFunc(app.stats.hands)}</strong></div><div>Grit: <strong>${fuzzyFunc(app.stats.grit)}</strong></div><div>Ambition: <strong>${fuzzyFunc(app.stats.ambition)}</strong></div></div>`;
-                }
-
-                let matchHtml = `<div style="color:#999;">No specific faculty match.</div>`;
-                if(app.matches && app.matches.length > 0) {
-                    matchHtml = app.matches.map(m => `<div><strong style="color:#2c3e50;">${m.name}</strong>: ${m.reason}</div>`).join('');
-                }
-                
-                // --- FACULTY OPINIONS UI ---
-                let opinionHtml = "";
-                if (app.lobbying) {
-                    const color = app.lobbying.type === 'support' ? '#d4edda' : '#f8d7da';
-                    const border = app.lobbying.type === 'support' ? '#c3e6cb' : '#f5c6cb';
-                    const icon = app.lobbying.type === 'support' ? '👍' : '👎';
-                    opinionHtml = `<div style="background:${color}; border:1px solid ${border}; padding:10px; margin-bottom:10px; border-radius:4px; font-size:0.9rem;"><strong>${icon} Faculty Opinion:</strong> ${app.lobbying.text}</div>`;
-                }
-
-                let felHtml = "";
-                if(app.application.hasFellowship) felHtml = `<div style="background:#fffbf0; border:1px solid #f1c40f; padding:10px; margin-bottom:10px; color:#b7950b;"><strong>🌟 External Fellowship:</strong> Free to department!</div>`;
-                if(app.isInternational) felHtml += `<div style="background:#f3e5f5; border:1px solid #8e44ad; padding:10px; margin-bottom:10px; color:#6c3483;"><strong>🌍 International Student:</strong> Cannot use Federal Grants. Visa Risk: Moderate.</div>`;
-
-                const rs = app.application.recScore;
-                const recColor = rs >= 8 ? '#27ae60' : (rs <= 4 ? '#c0392b' : '#f39c12');
-
-                let mainButtons = '';
-                if(app.status === 'Pending') {
-                    mainButtons = `
-                        <div style="display:flex; gap:10px; margin-bottom:10px;">
-                            <button class="btn-main" style="background:#27ae60; flex:1;" onclick="Game.offer('${app.id}', false)">Extend Offer</button>
-                            <button class="btn-main" style="background:#2980b9; flex:1;" onclick="Game.offer('${app.id}', true)">Offer + Flyout (-$500)</button>
-                        </div>
-                        <div style="display:flex; gap:10px;">
-                            <button class="btn-main" style="background:#f39c12; flex:1;" onclick="State.sweetenOffer('${app.id}')">Sweeten (Dean's Bonus)</button>
-                            <button class="btn-main" style="background:#c0392b; flex:1;" onclick="Game.reject('${app.id}')">Reject</button>
-                        </div>
-                    `;
-                    if(!app.flownOut) { 
-                        mainButtons += `<div style="margin-top:10px; text-align:center;"><button class="btn-small" onclick="Game.flyout('${app.id}')">Just Flyout (No Offer yet) - $500</button></div>`; 
-                    }
-                } else mainButtons = `<div style="font-weight:bold;">Status: ${app.status}</div>`;
-
-                detailContainer.innerHTML = `<div class="email-view-header"><div class="view-subject">${app.name}</div><div class="view-meta"><span>Field: <strong>${app.interest}</strong></span><span>Rec Letter: <strong style="color:${recColor}">${rs}/10</strong></span></div><div style="margin-top:15px;">${mainButtons}</div></div><div class="view-body">${felHtml}${opinionHtml}<div style="display:flex; gap:20px; margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:20px;"><div style="flex:1;"><div class="dossier-label">Record</div><div>GPA: ${app.application.gpa}</div><div>GRE: ${app.application.gre}</div><div style="margin-top:5px; font-style:italic; font-size:0.9rem;">"${app.facultyNote}"</div></div><div style="flex:1; background:#fffdf5; padding:10px; border:1px solid #efe8d0;"><div class="dossier-label">Faculty Alignment</div>${matchHtml}</div></div><div style="margin-bottom:20px; background:#f0f4f8; padding:10px; border-radius:4px;"><div class="dossier-label">True Potential (Evaluations)</div>${statsHtml}</div><div class="dossier-label">Interview (${app.interview.points} pts remaining)</div><div style="margin-bottom:10px;">${actionsHtml}</div><div style="background:#fff; border:1px solid #eee; padding:15px; max-height:200px; overflow-y:auto;">${chatHtml}</div></div>`;
-            }
+            statsHtml = `
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:10px 0; font-size:0.85rem;">
+                <div>🧠 Brains: <strong>${app.stats.brains.toFixed(0)}</strong></div>
+                <div>✋ Hands: <strong>${app.stats.hands.toFixed(0)}</strong></div>
+                <div>🔥 Ambition: <strong>${app.stats.ambition.toFixed(0)}</strong></div>
+                <div>🧱 Grit: <strong>${app.stats.grit.toFixed(0)}</strong></div>
+                <div style="grid-column:span 2; border-top:1px solid #eee; margin-top:5px; padding-top:5px; text-align:center;">
+                        Match Fit: <strong>${app.stats.fit.toFixed(0)}%</strong>
+                </div>
+            </div>`;
+        } else if (app.flyoutPending) {
+            statsHtml = `<div style="text-align:center; padding:15px; background:#e8f6f3; color:#16a085; border-radius:4px; margin:10px 0; border:1px solid #d4efdf;">
+                <div style="font-size:1.5rem;">✈️</div><div>Visit Scheduled</div><div style="font-size:0.8rem;">${app.flyoutTimer} wks</div>
+            </div>`;
+        } else {
+            statsHtml = `<div style="text-align:center; padding:15px; background:#f8f9fa; color:#7f8c8d; border-radius:4px; margin:10px 0; border:1px solid #eee;">
+                <div style="font-size:1.5rem;">🔒</div><div style="font-size:0.8rem;">Flyout to Reveal</div>
+            </div>`;
         }
-    },
+
+        let lobbyHtml = "";
+        if(app.lobbying) {
+            const color = app.lobbying.type === 'support' ? '#d4edda' : '#f8d7da';
+            const border = app.lobbying.type === 'support' ? '#c3e6cb' : '#f5c6cb';
+            lobbyHtml = `<div style="background:${color}; border:1px solid ${border}; padding:5px; font-size:0.8rem; margin-bottom:5px; border-radius:3px;">${app.lobbying.text}</div>`;
+        }
+
+        let actions = '';
+        let flyoutBtn = `<button class="btn-small" onclick="State.flyoutCandidate(${app.id})">✈️ Flyout ($500)</button>`;
+        if(app.flyoutPending) flyoutBtn = `<button class="btn-small" disabled style="opacity:0.6;">⌛ Scheduled</button>`;
+        if(app.flownOut) flyoutBtn = `<button class="btn-small" disabled style="opacity:0.6; background:#bdc3c7;">✔ Visited</button>`;
+
+        if(app.status === 'Pending') {
+            actions = `
+                ${flyoutBtn}
+                <button class="btn-small" style="background:#27ae60;" onclick="State.extendOffer(${app.id})">Accept</button>
+                <button class="btn-small" style="background:#c0392b;" onclick="State.rejectCandidate(${app.id})">Reject</button>
+            `;
+        } else if(app.status === 'Offer Extended') {
+            actions = `
+            <div style="color:#f39c12; font-weight:bold; font-size:0.9rem; margin-bottom:5px;">Offer Pending</div>
+            <div style="display:flex; gap:5px; justify-content:center;">
+                ${!app.flownOut ? flyoutBtn : ''} 
+                <button class="btn-small" onclick="State.sweetenOffer(${app.id})" title="Dept pays $5k bonus.">🏆 Fellowship (-$5k)</button>
+            </div>`;
+        } else {
+            const statusColor = app.status === 'Accepted' ? '#27ae60' : '#c0392b';
+            actions = `<div style="text-align:center; font-weight:bold; color:${statusColor}">${app.status}</div>`;
+        }
+
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <h3 style="margin:0; color:#2c3e50; font-size:1rem;">${app.name} ${app.application.hasFellowship ? '🏆' : ''}</h3>
+                    <div style="font-size:0.8rem; color:#666;">${app.interest}</div>
+                </div>
+                <div style="text-align:right; font-size:0.8rem;">
+                    <div>GPA: <strong>${app.application.gpa}</strong></div>
+                    <div>Recs: <strong>${app.application.recScore}/10</strong></div>
+                </div>
+            </div>
+            <div style="margin-top:8px; font-size:0.85rem; background:#fff; border:1px solid #eee; padding:5px;">
+                <div>🏛️ ${schoolDisplay}</div>
+                <div>🧪 Exp: <strong>${bg.monthsExp}mo</strong> (${bg.prevRole})</div>
+                <div>📝 SOP: ${getSopLabel(bg.sopScore)}</div>
+            </div>
+            ${lobbyHtml}
+            <div style="font-size:0.8rem; color:#555; font-style:italic; margin:5px 0;">"${app.facultyNote}"</div>
+            ${statsHtml}
+            ${yieldBadge}
+            <div style="margin-top:10px; display:flex; flex-direction:column; gap:5px; justify-content:center;">
+                ${actions}
+            </div>
+        `;
+        container.appendChild(card);
+    });
+},
 // --- PASTE ALL OF THIS CODE ---
     
     renderStudents: function(data) {

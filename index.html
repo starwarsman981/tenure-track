@@ -127,7 +127,70 @@
 				<div id="screen-finance" class="screen hidden"></div>
 				<div id="screen-students" class="screen hidden"></div>
 				<div id="screen-records" class="screen hidden"></div>
-				<div id="screen-admissions" class="screen hidden"></div>
+				<div id="screen-admissions" class="screen hidden">
+    <div class="screen-header" style="margin-bottom:15px; border-bottom:2px solid #2c3e50; padding-bottom:10px;">
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <h2 style="margin:0;">Graduate Admissions</h2>
+            
+            <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <select id="adm-sort" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; font-weight:bold; background:#e8f8f5;">
+                    <option value="default">Sort: Default</option>
+                    <option value="gpa">Sort: GPA (High-Low)</option>
+                    <option value="rec">Sort: Rec Letter (High-Low)</option>
+                    <option value="exp">Sort: Experience (High-Low)</option>
+                    <option value="sop">Sort: SOP Strength (High-Low)</option>
+                </select>
+
+                <select id="adm-filter-status" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px;">
+                    <option value="All">Status: All</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Offer Extended">Offers Out</option>
+                    <option value="Accepted">Accepted</option>
+                    <option value="Rejected">Rejected</option>
+                </select>
+                
+                <select id="adm-filter-interest" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px;">
+                    <option value="All">Field: All</option>
+                    <option value="Organic">Organic</option>
+                    <option value="Inorganic">Inorganic</option>
+                    <option value="Physical">Physical</option>
+                    <option value="Analytical">Analytical</option>
+                    <option value="Materials">Materials</option>
+                </select>
+            </div>
+
+            <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <select id="adm-filter-gpa" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
+                    <option value="All">GPA: Any</option>
+                    <option value="3.8+">GPA > 3.8 (Elite)</option>
+                    <option value="3.5+">GPA > 3.5 (Strong)</option>
+                    <option value="3.0-3.5">GPA 3.0 - 3.5</option>
+                    <option value="<3.0">GPA < 3.0 (Risk)</option>
+                </select>
+
+                <select id="adm-filter-sop" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
+                    <option value="All">SOP: Any</option>
+                    <option value="80+">SOP > 80 (Great)</option>
+                    <option value="50-80">SOP 50 - 80 (Avg)</option>
+                    <option value="<50">SOP < 50 (Weak)</option>
+                </select>
+
+                <select id="adm-filter-rec" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
+                    <option value="All">Recs: Any</option>
+                    <option value="9+">Recs 9-10 (Glowing)</option>
+                    <option value="7+">Recs 7+ (Good)</option>
+                    <option value="<7">Recs < 7 (Concern)</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="admissions-dashboard" style="margin-top:15px; background:#f8f9fa; padding:10px; border-radius:5px; border:1px solid #ddd; display:flex; align-items:center; gap:15px;">
+            </div>
+    </div>
+
+    <div id="admissions-pool-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:15px; padding-bottom:50px;">
+        </div>
+</div>
 				<div id="screen-search" class="screen hidden" id="screen-faculty-search"></div>
 			</div>
 		</div>

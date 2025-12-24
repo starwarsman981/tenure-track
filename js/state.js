@@ -35,6 +35,10 @@ const State = {
         FACILITY_WEEKLY: 2000 
     },
 
+    /* js/state.js */
+
+    /* js/state.js */
+
     initNewGame: function(name, typeKey, discKey) {
         this.data.year = 2025; this.data.month = 7; this.data.day = 1;
         this.data.deptName = name; this.data.type = typeKey; this.data.discipline = discKey;
@@ -47,24 +51,65 @@ const State = {
         if(typeKey === 'state') { this.data.budget = 250000; this.data.prestige = 30; }
         else if(typeKey === 'ivy') { this.data.budget = 750000; this.data.prestige = 80; }
         else { this.data.budget = 100000; this.data.prestige = 10; }
-// Inside initNewGame...
+
         this.data.admissions = {
             active: false,
             pool: [],
             setupComplete: false,
-            strategyRequested: false // <--- Ensure this line exists!
+            strategyRequested: false 
         };
+        
         this.data.faculty = [];
         const targetCount = Math.floor(Math.random() * 5) + 8; 
-        const ranks = ["Adjunct", "Assistant", "Assistant", "Associate", "Associate", "Full", "Full", "Full"];
+        
+        // 1. Min 1, Max 2 Assistants
+        const assistantCount = 1 + (Math.random() < 0.5 ? 1 : 0); 
+        
+        // 2. Build Ranks
+        let ranks = [];
+        for(let i=0; i<assistantCount; i++) ranks.push("Assistant");
+        while(ranks.length < targetCount) {
+            const r = Math.random();
+            if(r < 0.45) ranks.push("Associate");
+            else if(r < 0.90) ranks.push("Full");
+            else ranks.push("Adjunct");
+        }
+        
+        // Shuffle
+        ranks.sort(() => Math.random() - 0.5);
+
+        // Ensure Chair is Senior
+        if(ranks[0] === "Assistant" || ranks[0] === "Adjunct") {
+            const seniorIdx = ranks.findIndex(r => r === "Full" || r === "Associate");
+            if(seniorIdx !== -1) {
+                [ranks[0], ranks[seniorIdx]] = [ranks[seniorIdx], ranks[0]];
+            }
+        }
+
+        // --- NEW: TENURE STAGGER LOGIC ---
+        // We pick distinct years for the assistants found in the 'ranks' array.
+        // Available years: 0, 1, 2, 3, 4
+        let availableYears = [0, 1, 2, 3, 4];
+        // Shuffle available years
+        availableYears.sort(() => Math.random() - 0.5);
+        
+        let assistantIndex = 0;
+        // --------------------------------
+
         const fields = ["Organic", "Inorganic", "Physical", "Analytical", "Materials"];
         
         for(let i=0; i<targetCount; i++) {
-            let r = ranks[Math.floor(Math.random()*ranks.length)];
+            let r = ranks[i];
             let f = fields[Math.floor(Math.random()*fields.length)];
-            if(i==0) r="Full"; if(i==1) r="Associate";
             
-            const prof = FacultyGenerator.generate(r, f);
+            // Pass Staggered Year if Assistant
+            let forcedYear = null;
+            if(r === "Assistant") {
+                forcedYear = availableYears[assistantIndex];
+                assistantIndex++;
+            }
+
+            const prof = FacultyGenerator.generate(r, f, forcedYear);
             const studentCount = StudentGenerator.getCountForRank(r);
             
             for(let s=0; s<studentCount; s++) {
@@ -74,8 +119,6 @@ const State = {
             }
             this.data.faculty.push(prof);
         }
-
-        
         
         this.data.faculty.forEach(f => this.recalcFacultyFinances(f));
         
@@ -83,7 +126,7 @@ const State = {
             `Welcome to the big chair! Here is what you need to know to survive:<br><br>
             1. <strong>The Budget:</strong> We burn money weekly. If we go broke, the Dean fires you. Keep an eye on the <span style='color:#c0392b'>Finance Tab</span>.<br>
             2. <strong>Research:</strong> Faculty need Grants. If they run out of money, it's a downward spiral from there. <br>
-            3. <strong>Grad Students:</strong> They do the real work. They'll fight for prized RA positions, and if professors don't have the cash, you'll be funding them on a TA instead. Every year, you'll bring in a new admissions class and graduate the senior canidates. <br><br>
+            3. <strong>Grad Students:</strong> They do the real work. They'll fight for prized RA positions, and if professors don't have the cash, you'll be funding them on a TA instead. Every year, you'll bring in a new admissions class and graduate the senior candidates. <br><br>
             Good luck. You're going to need it.`);
             
         this.addEmail("Provost", "Fiscal Year Start", `Welcome. Expenses are deducted weekly.
@@ -160,10 +203,11 @@ const State = {
 
         // Weekly/Daily Loops
         if(this.data.day % 7 === 0) {
-            this.processWeeklyFinances();
-            this.processGrantCycle();
-            this.processMorale();
-            this.updateCitations();
+           this.processWeeklyFinances();
+           this.processGrantCycle();
+           this.processMorale();
+           this.updateCitations();
+           this.processAdmissionsQueue(); // <--- ADD THIS LINE
         }
         this.processResearchOutput();
 
@@ -261,10 +305,14 @@ const State = {
         }
         
         // --- ADMISSIONS SEASON ---
-        const isSeason = (this.data.month === 10 || this.data.month === 11 || this.data.month === 0 || this.data.month === 1 || this.data.month === 2);
-        if (isSeason && !this.data.admissions.active) {
-            if(!this.data.admissions.setupComplete) this.setRecruitmentStrategy(7, "standard");
-            this.startAdmissionsSeason();
+        // --- ADMISSIONS SEASON ---
+// Starts Month 11 (Dec) through Month 2 (March)
+        const isSeason = (this.data.month === 11 || this.data.month === 0 || this.data.month === 1 || this.data.month === 2);
+
+// Only trigger specifically on Dec 1st (or if we somehow missed it and are in season)
+        if (this.data.month === 11 && this.data.day === 1 && !this.data.admissions.active) {
+        if(!this.data.admissions.setupComplete) this.setRecruitmentStrategy(7, "standard");
+        this.startAdmissionsSeason();
         }
 
         // JAN 20: VISIT WEEKEND (Moved from March)
@@ -586,16 +634,12 @@ processWeeklyFinances: function() {
 
     /* js/state.js */
 
-    /* js/state.js */
-
     recalcFacultyFinances: function(prof) {
-        // Debug line to prove new code is running
-        console.log(`Calculating Variable Costs for ${prof.name}...`);
-
         let weeklyBurn = this.COSTS.LAB_BASE;
         const myStudents = this.data.students.filter(s => s.advisorId === prof.id);
         const pol = this.data.policy; 
         
+        // Counters
         let suppliesCost = 0;
         let raCost = 0;
         let raCount = 0;
@@ -603,18 +647,8 @@ processWeeklyFinances: function() {
         let fellowCount = 0;
 
         myStudents.forEach(s => {
-            // --- VARIABLE COST LOGIC ---
-            // 1. Generate a stable seed based on Student ID + Day
-            // This ensures the number changes daily, but doesn't flicker if you hover
-            const seed = (s.id || 0) + (this.data.day * 100) + (this.data.year * 1000);
-            const pseudoRand = Math.abs(Math.sin(seed) * 10000) % 1; 
-            
-            // 2. Set Cost: Min $350, Max $750. 
-            // Note: We deliberately IGNORE this.COSTS.SUPPLIES_WEEKLY (which is 300)
-            const chemCost = 350 + Math.floor(pseudoRand * 401); 
-
-            suppliesCost += chemCost;
-            weeklyBurn += chemCost;
+            suppliesCost += this.COSTS.SUPPLIES_WEEKLY;
+            weeklyBurn += this.COSTS.SUPPLIES_WEEKLY;
             
             if(s.funding === "RA") {
                 const stip = (this.COSTS.RA_WEEKLY * pol.stipendMod);
@@ -628,29 +662,29 @@ processWeeklyFinances: function() {
             }
         });
 
-        // Store Monthly Burn
+        // Store monthly for the simulation
         prof.burnRate = weeklyBurn * 4.3; 
         
-        // Build Breakdown String
+        // Store Weekly Breakdown string for the UI
         let parts = [];
-        parts.push(`Lab Maintenance: $${this.COSTS.LAB_BASE}`);
         
-        if(suppliesCost > 0) {
-            const avg = Math.round(suppliesCost / myStudents.length);
-            // We explicitly show the average here so you can verify it's > 300
-            parts.push(`Chemicals (Variable): $${suppliesCost} (Avg $${avg}/student)`);
-        }
+        // --- UPDATED LABEL HERE ---
+        parts.push(`Lab Maintenance & General Needs: $${this.COSTS.LAB_BASE}`);
+        // --------------------------
+        
+        if(suppliesCost > 0) parts.push(`Chemicals & Supplies: $${suppliesCost} (${myStudents.length} students)`);
         
         if(raCost > 0) parts.push(`RA Stipends: $${raCost.toFixed(0)} (${raCount} students)`);
+        
         if(taCount > 0) parts.push(`TA Support: ${taCount} (Paid by Dept)`);
+        
         if(fellowCount > 0) parts.push(`Fellowships: ${fellowCount} (Free)`);
         
         prof.burnBreakdown = parts.join('\n');
 
-        // Update Reserves & Runway
+        // Runway Calc
         const totalFunds = prof.grants.reduce((sum, g) => sum + g.remaining, 0);
         prof.funds = totalFunds;
-        
         if(weeklyBurn > 0) {
             const weeksLeft = totalFunds / weeklyBurn;
             if(weeksLeft > 104) prof.runway = "> 2 yrs";
@@ -770,9 +804,68 @@ processGrantCycle: function() {
     
     processDecisionDay: function() { let count = 0; this.data.admissions.pool.forEach(app => { if(app.status === 'Offer Extended') { this.resolveApplication(app, "Deadline Decision"); if(app.status === "Accepted") count++; } }); this.data.pendingEvent = { title: "Decision Day Results", desc: `${count} candidates accepted offers.`, choices: [{ text: "View Roster", cost: 0, flavor: "Done.", effect: "none" }] }; UI.renderAdmissions(this.data); },
     
+    /* js/state.js */
+
+    // NEW: Centralized Math for Acceptance Probability
+    /* js/state.js */
+
+    /* js/state.js */
+
+    calculateYieldChance: function(app) {
+        // 1. BASE CHANCE (40%)
+        let chance = 40; 
+
+        // 2. POSITIVE MODIFIERS
+        if (app.flownOut) chance += 15;      
+        if (app.yieldBonus > 0) chance += 25;
+        chance += (app.stats.fit / 5);       
+
+        // 3. NEGATIVE MODIFIERS
+        
+        // A. SCHOOL TIER PENALTY
+        if (app.background && app.background.tier === 1) chance -= 15; 
+        if (app.background && app.background.tier === 2) chance -= 5;
+
+        // B. BRAINS PENALTY (Scaled > 85)
+        if (app.stats.brains > 85) {
+            chance -= (app.stats.brains - 85); 
+        }
+
+        // C. STIPEND VARIANCE (The Fix)
+        // We calculate the difference from 100% (1.0)
+        const stipDiff = this.data.policy.stipendMod - 1.0;
+
+        if (stipDiff < 0) {
+            // PENALTY: Linear scaling (1.5x multiplier)
+            // 99% pay (-0.01) -> -1.5% chance
+            // 90% pay (-0.10) -> -15% chance
+            // 70% pay (-0.30) -> -45% chance
+            chance += (stipDiff * 150);
+        } else if (stipDiff > 0) {
+            // BONUS: Small reward for overpaying (0.5x multiplier)
+            // 110% pay (+0.10) -> +5% chance
+            chance += (stipDiff * 50);
+        }
+
+        // 4. CLAMP
+        return Math.max(10, Math.min(95, Math.floor(chance)));
+    },
+    rejectCandidate: function(appId) { 
+        const app = this.data.admissions.pool.find(a => a.id === appId); 
+        if(app) {
+            app.status = "Rejected";
+            // FIX: Refresh the UI immediately
+            if(typeof UI !== 'undefined') UI.renderAdmissions(this.data);
+        }
+    },
+
     resolveApplication: function(app, reason) { 
-        const chance = 0.3 + (app.yieldBonus / 100) + (this.data.prestige / 200) + (app.stats.fit / 200); 
-        const accepted = Math.random() < chance; 
+        const percentage = this.calculateYieldChance(app);
+        
+        // Roll the dice (0 to 100)
+        const roll = Math.random() * 100;
+        const accepted = roll < percentage; 
+        
         app.status = accepted ? "Accepted" : "Declined"; 
         
         let subject = "";
@@ -780,8 +873,8 @@ processGrantCycle: function() {
 
         if (accepted) {
             subject = `Acceptance: ${app.name}`;
-            const excitement = app.yieldBonus > 20 ? "thrilled" : "pleased";
-            const why = app.application.hasFellowship ? "your department's willingness to support my fellowship" : "the strong alignment with the faculty";
+            const excitement = percentage > 80 ? "thrilled" : "pleased";
+            const why = app.application.hasFellowship ? "the generous fellowship offer" : "the research fit";
             body = `<p>Dear Chair,</p><p>I am <strong>${excitement}</strong> to accept your offer. The deciding factor was ${why}. I look forward to the Fall.</p><br><div style="background:#e8f8f5; border-left:4px solid #2ecc71; padding:10px;"><strong>Admin Note:</strong><br>Candidate confirmed.</div>`;
         } else {
             subject = `Declined: ${app.name}`;
@@ -791,12 +884,15 @@ processGrantCycle: function() {
             if (this.data.policy.stipendMod < 1.0) {
                 rejectionReason = "Financial";
                 specificFeedback = "The stipend is not competitive compared to other offers.";
-            } else if (this.data.prestige < 50 && app.stats.brains > 80) {
+            } else if (app.stats.brains > 85 && this.data.prestige < 50) {
                 rejectionReason = "Prestige";
-                specificFeedback = "I accepted an offer from a higher-ranked program.";
-            } else if (app.stats.fit < 40) {
+                specificFeedback = "I accepted an offer from a higher-ranked institution (Ivy/Tier 1).";
+            } else if (app.stats.fit < 50) {
                 rejectionReason = "Research Fit";
                 specificFeedback = "I didn't feel a strong scientific connection.";
+            } else {
+                rejectionReason = "Other Options";
+                specificFeedback = "It was a difficult choice, but I found a better fit elsewhere.";
             }
 
             body = `<p>Dear Chair,</p><p>Thank you for the offer. I have decided to decline.</p><div style="background:#fdedec; border:1px solid #ebccd1; padding:10px; margin:10px 0;"><strong>Reason: ${rejectionReason}</strong><br><em>"${specificFeedback}"</em></div>`;
@@ -804,16 +900,13 @@ processGrantCycle: function() {
 
         this.addEmail(app.name, subject, body, 'notification'); 
         
+        // Morale Impacts for Lobbying
         if(app.lobbying) {
             const fac = this.data.faculty.find(f => f.id === app.lobbying.facultyId);
             if(fac) {
                 if (app.lobbying.type === 'support' && app.status === 'Rejected') { 
                     fac.happiness -= 15;
                     this.addEmail(fac.name, "Disappointed", `I am very disappointed we let ${app.name} go.`, 'notification');
-                }
-                if (app.lobbying.type === 'oppose' && app.status === 'Accepted') { 
-                    fac.happiness -= 15;
-                    this.addEmail(fac.name, "Concerned", `I strongly disagree with admitting ${app.name}.`, 'notification');
                 }
             }
         }
@@ -823,8 +916,61 @@ processGrantCycle: function() {
     
     sweetenOffer: function(appId) { const app = this.data.admissions.pool.find(a => a.id === appId); if(!app || this.data.budget < 5000) return; this.data.budget -= 5000; app.yieldBonus += 25; app.facultyNote += " (Dean's Fellowship)"; this.addEmail("Admin", "Fellowship Approved", `authorized $5k fellowship for ${app.name}.`); if(typeof UI !== 'undefined') UI.renderAdmissions(this.data); },
     performInterview: function(appId, qId) { const app = this.data.admissions.pool.find(a => a.id === appId); if(!app || app.interview.points <= 0) return null; app.interview.points--; let qText = qId; let reveals = "fit"; if(typeof ADMISSIONS !== 'undefined') { const realQ = ADMISSIONS.QUESTIONS.find(q => q.id === qId); if(realQ) { qText = realQ.text; reveals = realQ.reveals; } } let answerKey = "med"; let statVal = 50; if(app.stats && app.stats[reveals] !== undefined) statVal = app.stats[reveals]; if(statVal > 70) answerKey = "high"; else if(statVal < 40) answerKey = "low"; let answerText = "Generic answer."; if(typeof ADMISSIONS !== 'undefined' && ADMISSIONS.ANSWERS[reveals] && ADMISSIONS.ANSWERS[reveals][answerKey]) { const options = ADMISSIONS.ANSWERS[reveals][answerKey]; answerText = options[Math.floor(Math.random() * options.length)]; } const entry = { question: qText, answer: answerText }; app.interview.log.push(entry); return entry; },
-    flyoutCandidate: function(appId) { const app = this.data.admissions.pool.find(a => a.id === appId); if(!app) return; this.data.budget -= 500; app.flownOut = true; app.statsVisible = true; app.yieldBonus += 10; this.addEmail("Travel", `Flyout: ${app.name}`, "Candidate visited."); },
+    /* js/state.js */
+
+    /* js/state.js - Replace flyoutCandidate */
+
+    flyoutCandidate: function(appId) { 
+    const app = this.data.admissions.pool.find(a => a.id === appId); 
+    if(!app || app.flownOut || app.flyoutPending) return; 
+
+    if(this.data.budget < 500) {
+        alert("Not enough budget ($500 needed).");
+        return;
+    }
+
+    // Deduct cost now
+    this.data.budget -= 500; 
     
+    // Set Pending State
+    app.flyoutPending = true;
+    app.flyoutTimer = Math.floor(Math.random() * 4) + 2; // 2 to 5 weeks delay
+
+    // Send Confirmation Email
+    this.addEmail("Travel Office", `Flyout Scheduled: ${app.name}`, 
+        `We have booked the flights for ${app.name}. (-$500)<br><br>
+        Due to scheduling conflicts, they will visit the department in <strong>${app.flyoutTimer} weeks</strong>.<br>
+        Their stats and interview feedback will populate after the visit is complete.`, "notification");
+
+    // Refresh UI
+    if(typeof UI !== 'undefined') UI.renderAdmissions(this.data);
+    },
+    /* js/state.js - Add this new function */
+
+    processAdmissionsQueue: function() {
+    if(!this.data.admissions.active) return;
+
+    this.data.admissions.pool.forEach(app => {
+        if(app.flyoutPending) {
+            app.flyoutTimer--;
+            
+            // Timer hits 0: Visit Happens
+            if(app.flyoutTimer <= 0) {
+                app.flyoutPending = false;
+                app.flownOut = true;     // Mark as visited
+                app.statsVisible = true; // Reveal Stats
+                app.yieldBonus += 10;
+                app.facultyNote += " (Visited)";
+                
+                // Notify Player
+                this.addEmail("Grad Admissions", `Visit Complete: ${app.name}`, 
+                    `<strong>${app.name}</strong> has finished their campus visit.<br>
+                    We have updated their file with their detailed stats and faculty impressions.<br>
+                    <button class="btn-small" onclick="UI.toggleGameView(true); UI.navigate('admissions')">View Profile</button>`, "notification");
+            }
+        }
+    });
+    },
     extendOffer: function(appId, withFlyout=false) { 
         const app = this.data.admissions.pool.find(a => a.id === appId); 
         if(app) { 
@@ -1242,67 +1388,23 @@ const FinanceSystem = {
 
 /* js/state.js */
 
+/* PASTE THIS INTO js/state.js */
+
+/* js/state.js */
+
 const ApplicantGenerator = {
-    firstNames: [
-        // US / UK / Western
-        "James","Mary","John","Patricia","Robert","Jennifer","Michael","Linda","William","Elizabeth",
-        "David","Barbara","Richard","Susan","Joseph","Jessica","Thomas","Sarah","Charles","Karen",
-        "Christopher","Lisa","Daniel","Nancy","Matthew","Betty","Anthony","Margaret","Mark","Sandra",
-        "Steven","Ashley","Paul","Kimberly","Andrew","Emily","Joshua","Donna","Kenneth","Michelle",
-        "Kevin","Carol","Brian","Amanda","George","Melissa","Edward","Deborah","Ronald","Stephanie",
-        "Timothy","Rebecca","Jason","Laura","Jeffrey","Helen","Ryan","Sharon","Jacob","Cynthia",
-        
-        // East Asian (Chinese, Japanese, Korean)
-        "Wei","Li","Hao","Min","Jun","Ying","Lei","Jin","Xiang","Bo","Cheng","Dong","Fang","Gang",
-        "Sora","Haruto","Yuna","Kenji","Hiro","Akira","Yuki","Ren","Sakura","Hina","Kaito","Riku",
-        "Ji-woo","Min-jun","Seo-jun","Ha-eun","Do-yun","Ji-yoo","Si-woo","Su-ah","Joo-won","Ye-jun",
-        
-        // South Asian (Indian)
-        "Aarav","Priya","Vihaan","Ananya","Aditya","Diya","Arjun","Saanvi","Rohan","Ishaan",
-        "Sai","Aarya","Reyansh","Myra","Krishna","Zara","Ishita","Vivaan","Kavya","Dhruv",
-        
-        // European (German, French, Italian, Spanish, Slavic)
-        "Lukas","Emma","Matteo","Sofia","Hugo","Camille","Lars","Anna","Dimitri","Elena",
-        "Gabriel","Alice","Leo","Chloé","Louis","Ines","Adam","Lena","Noah","Mia",
-        "Luca","Giulia","Alessandro","Martina","Lorenzo","Chiara","Leonardo","Aurora",
-        "Santiago","Mateo","Sebastian","Valentina","Matias","Isabella","Nicolas","Camila",
-        "Ivan","Maria","Maxim","Anastasia","Artem","Daria","Mikhail","Polina",
-        
-        // Middle Eastern
-        "Mohammed","Fatima","Ahmed","Aisha","Ali","Maryam","Omar","Layla","Youssef","Noor",
-        "Ibrahim","Zainab","Hassan","Salma","Hussein","Sara","Abdullah","Jana"
+    firstNames: [ "James","Mary","John","Patricia","Robert","Jennifer","Michael","Linda","William","Elizabeth","David","Barbara","Richard","Susan","Joseph","Jessica","Thomas","Sarah","Charles","Karen","Christopher","Lisa","Daniel","Nancy","Matthew","Betty","Anthony","Margaret","Mark","Sandra","Steven","Ashley","Paul","Kimberly","Andrew","Emily","Joshua","Donna","Kenneth","Michelle","Kevin","Carol","Brian","Amanda","George","Melissa","Edward","Deborah","Ronald","Stephanie","Timothy","Rebecca","Jason","Laura","Jeffrey","Helen","Ryan","Sharon","Jacob","Cynthia","Wei","Li","Hao","Min","Jun","Ying","Lei","Jin","Xiang","Bo","Cheng","Dong","Fang","Gang","Sora","Haruto","Yuna","Kenji","Hiro","Akira","Yuki","Ren","Sakura","Hina","Kaito","Riku","Ji-woo","Min-jun","Seo-jun","Ha-eun","Do-yun","Ji-yoo","Si-woo","Su-ah","Joo-won","Ye-jun","Aarav","Priya","Vihaan","Ananya","Aditya","Diya","Arjun","Saanvi","Rohan","Ishaan","Sai","Aarya","Reyansh","Myra","Krishna","Zara","Ishita","Vivaan","Kavya","Dhruv","Lukas","Emma","Matteo","Sofia","Hugo","Camille","Lars","Anna","Dimitri","Elena","Gabriel","Alice","Leo","Chloé","Louis","Ines","Adam","Lena","Noah","Mia","Luca","Giulia","Alessandro","Martina","Lorenzo","Chiara","Leonardo","Aurora","Santiago","Mateo","Sebastian","Valentina","Matias","Isabella","Nicolas","Camila","Ivan","Maria","Maxim","Anastasia","Artem","Daria","Mikhail","Polina","Mohammed","Fatima","Ahmed","Aisha","Ali","Maryam","Omar","Layla","Youssef","Noor","Ibrahim","Zainab","Hassan","Salma","Hussein","Sara","Abdullah","Jana" ],
+    lastNames: [ "Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez","Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin","Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson","Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores","Wang","Li","Zhang","Liu","Chen","Yang","Huang","Zhao","Wu","Zhou","Xu","Sun","Ma","Zhu","Hu","Guo","He","Lin","Gao","Luo","Patel","Singh","Sharma","Kumar","Gupta","Rao","Shah","Mehta","Jain","Verma","Mishra","Reddy","Nair","Kapoor","Malhotra","Bhat","Saxena","Iyer","Chopra","Das","Sato","Suzuki","Takahashi","Tanaka","Watanabe","Ito","Yamamoto","Nakamura","Kobayashi","Kato","Kim","Park","Jeong","Choi","Kang","Yoon","Lim","Shin","Han","Oh","Müller","Schmidt","Schneider","Fischer","Weber","Meyer","Wagner","Becker","Schulz","Hoffmann","Dubois","Leroy","Moreau","Simon","Laurent","Lefebvre","Michel","Garcia","David","Bertrand","Rossi","Russo","Ferrari","Esposito","Bianchi","Romano","Colombo","Ricci","Marino","Greco","Ivanov","Smirnov","Kuznetsov","Popov","Vasiliev","Petrov","Sokolov","Mikhailov","Fedorov","Morozov","Ahmed","Ali","Mohamed","Youssef","Ibrahim","Mahmoud","Hassan","Hussein","Ismail","Khan" ],
+
+    // --- NEW: School Database & Experience Types ---
+    schools: [
+        { name: "MIT", tier: 1 }, { name: "Stanford", tier: 1 }, { name: "Berkeley", tier: 1 }, { name: "CalTech", tier: 1 }, { name: "Harvard", tier: 1 },
+        { name: "U. Michigan", tier: 2 }, { name: "Georgia Tech", tier: 2 }, { name: "UIUC", tier: 2 }, { name: "UT Austin", tier: 2 }, { name: "UNC Chapel Hill", tier: 2 },
+        { name: "State Univ", tier: 3 }, { name: "City College", tier: 3 }, { name: "Regional Tech", tier: 3 }, { name: "Liberal Arts Coll.", tier: 3 }
     ],
-    
-    lastNames: [
-        // English / Common
-        "Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez",
-        "Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin",
-        "Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson",
-        "Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores",
-        
-        // Chinese
-        "Wang","Li","Zhang","Liu","Chen","Yang","Huang","Zhao","Wu","Zhou",
-        "Xu","Sun","Ma","Zhu","Hu","Guo","He","Lin","Gao","Luo",
-        
-        // Indian
-        "Patel","Singh","Sharma","Kumar","Gupta","Rao","Shah","Mehta","Jain","Verma",
-        "Mishra","Reddy","Nair","Kapoor","Malhotra","Bhat","Saxena","Iyer","Chopra","Das",
-        
-        // Japanese
-        "Sato","Suzuki","Takahashi","Tanaka","Watanabe","Ito","Yamamoto","Nakamura","Kobayashi","Kato",
-        
-        // Korean
-        "Kim","Park","Jeong","Choi","Kang","Yoon","Lim","Shin","Han","Oh",
-        
-        // European
-        "Müller","Schmidt","Schneider","Fischer","Weber","Meyer","Wagner","Becker","Schulz","Hoffmann", // German
-        "Dubois","Leroy","Moreau","Simon","Laurent","Lefebvre","Michel","Garcia","David","Bertrand", // French
-        "Rossi","Russo","Ferrari","Esposito","Bianchi","Romano","Colombo","Ricci","Marino","Greco", // Italian
-        "Ivanov","Smirnov","Kuznetsov","Popov","Vasiliev","Petrov","Sokolov","Mikhailov","Fedorov","Morozov", // Russian
-        
-        // Middle Eastern
-        "Ahmed","Ali","Mohamed","Youssef","Ibrahim","Mahmoud","Hassan","Hussein","Ismail","Khan"
-    ],
+
+    expTypes: ["REU Program", "Senior Thesis", "Industry Intern", "Lab Tech", "Summer Research"],
+    // -----------------------------------------------
 
     generateName: function(isInternational) {
         const f = this.firstNames[Math.floor(Math.random() * this.firstNames.length)];
@@ -1310,12 +1412,7 @@ const ApplicantGenerator = {
         return `${f} ${l}`;
     },
 
-    // ... (Keep your existing generatePool and getFuzzyStat functions exactly as they were) ...
     generatePool: function(facultyList, qualityMod, volumeMod) {
-        // [PASTE YOUR EXISTING GENERATEPOOL CODE HERE IF YOU NEED TO KEEP IT]
-        // If you just replace the object, make sure to copy the generatePool logic from your previous state.js
-        // or just copy the arrays above and paste them into your existing file.
-        
         const pool = [];
         const baseVolume = 25; 
         const count = Math.floor(baseVolume * volumeMod) + Math.floor(Math.random() * 10);
@@ -1326,6 +1423,7 @@ const ApplicantGenerator = {
             const statBonus = isInternational ? 5 : 0;
             const baseStat = (30 * qualityMod) + statBonus; 
             
+            // 1. Core Stats
             const brains = Math.min(100, Math.floor(Math.random() * (100-baseStat)) + baseStat);
             let gpa = 2.8 + (brains / 100) + ((Math.random() * 0.4) - 0.1);
             gpa = Math.max(2.7, Math.min(4.0, gpa));
@@ -1333,11 +1431,31 @@ const ApplicantGenerator = {
             recScore = Math.max(1, Math.min(10, recScore));
 
             const hasFellowship = isInternational ? false : (Math.random() < 0.08); 
+            
+            // 2. NEW: Background Generation
+            const school = this.schools[Math.floor(Math.random() * this.schools.length)];
+            
+            // Experience: 30% chance of 0 experience. 70% chance of 3-36 months.
+            let monthsExp = 0;
+            let prevRole = "None";
+            if(Math.random() > 0.3) {
+                monthsExp = 3 + Math.floor(Math.random() * 33);
+                prevRole = this.expTypes[Math.floor(Math.random() * this.expTypes.length)];
+            }
+            
+            // SOP: Base is random, boosted by brains/experience
+            let sopScore = Math.floor(Math.random() * 60) + 20; // Base 20-80
+            if(brains > 80) sopScore += 10;
+            if(monthsExp > 12) sopScore += 10;
+            sopScore = Math.min(100, sopScore);
+
+            // 3. Match Logic
             const interest = safeFacList[Math.floor(Math.random() * safeFacList.length)].field;
             const matches = safeFacList.filter(f => f.field === interest).map(f => ({ name: f.name, reason: "Direct Fit" }));
             
             let facultyNote = "No strong faculty interest.";
             let lobbying = null;
+
             if (safeFacList.length > 0 && Math.random() < 0.20) {
                 const fac = safeFacList[Math.floor(Math.random() * safeFacList.length)];
                 const type = Math.random() > 0.5 ? 'support' : 'oppose';
@@ -1359,6 +1477,16 @@ const ApplicantGenerator = {
                 id: Date.now() + i,
                 name: this.generateName(isInternational),
                 isInternational: isInternational,
+                
+                // NEW: Background Object
+                background: {
+                    school: school.name,
+                    tier: school.tier,
+                    monthsExp: monthsExp,
+                    prevRole: prevRole,
+                    sopScore: sopScore
+                },
+
                 stats: { brains, hands: Math.random()*100, grit: Math.random()*100, ambition: Math.random()*100, fit: Math.random()*100 },
                 statsVisible: false, yieldBonus: 0,
                 application: { gpa: gpa.toFixed(2), recScore: recScore, gre: 310, hasFellowship: hasFellowship },
@@ -1369,55 +1497,202 @@ const ApplicantGenerator = {
         }
         return pool;
     },
-    getFuzzyStat: function(val) { return val >= 85 ? "Exceptional" : (val >= 70 ? "Strong" : (val >= 50 ? "Average" : "Weak")); }
+    
+    getFuzzyStat: function(val) { 
+        return val >= 85 ? "Exceptional" : (val >= 70 ? "Strong" : (val >= 50 ? "Average" : "Weak")); 
+    }
 };
+
+/* js/state.js */
 
 const StudentGenerator = {
     generate: function(advisorId, advisorName) {
-        const year = Math.floor(Math.random() * 6) + 1; 
+        const year = Math.floor(Math.random() * 6) + 1; // Years 1-6
         const name = ApplicantGenerator.generateName(false);
+        
+        // 1. Funding Logic
         let funding = "TA";
         if(Math.random() < 0.05) { funding = "Fellowship"; } 
-        else { const raChance = (year - 1) * 0.25; if(Math.random() < raChance) { funding = "RA"; } else { funding = "TA"; } }
+        else { 
+            const raChance = (year - 1) * 0.25; 
+            if(Math.random() < raChance) { funding = "RA"; } 
+            else { funding = "TA"; } 
+        }
+
+        // 2. Generate Stats (Using new logic logic)
+        // Students who survived to Year 4+ usually have better stats
+        const survivalBonus = year > 2 ? 10 : 0;
+        const brains = Math.min(100, Math.floor(Math.random() * 70) + 20 + survivalBonus);
+        
+        // 3. Generate Background (So they match the new Applicant system)
+        // We use the ApplicantGenerator's database so the world is consistent
+        const schoolList = ApplicantGenerator.schools || [ { name: "State Univ", tier: 3 } ];
+        const school = schoolList[Math.floor(Math.random() * schoolList.length)];
+        
+        const expTypes = ApplicantGenerator.expTypes || ["Research Assistant"];
+        const prevRole = expTypes[Math.floor(Math.random() * expTypes.length)];
+        const monthsExp = 3 + Math.floor(Math.random() * 24);
+
         return { 
-            id: Date.now()+Math.random(), 
+            id: Date.now() + Math.random(), 
             name: `${name} (G${year})`, 
             year: year, 
             advisorId: advisorId, 
             funding: funding,
+            
+            // Stats
             pubs: year === 1 ? 0 : Math.floor((year - 1) * (0.3 + Math.random() * 1.5)), 
-            stats: { brains: Math.floor(Math.random()*100), hands: Math.floor(Math.random()*100), grit: Math.floor(Math.random()*100) }
+            stats: { 
+                brains: brains, 
+                hands: Math.floor(Math.random()*100), 
+                grit: Math.floor(Math.random()*100),
+                ambition: Math.floor(Math.random()*100),
+                fit: Math.floor(Math.random()*100)
+            },
+
+            // NEW: Background Data for Starting Students
+            background: {
+                school: school.name,
+                tier: school.tier,
+                monthsExp: monthsExp,
+                prevRole: prevRole,
+                sopScore: Math.floor(Math.random() * 40) + 50 // Existing students generally had decent SOPs to get in
+            }
         };
     },
-    getCountForRank: function(rank) { return rank === "Adjunct" ? 0 : 5 + Math.floor(Math.random() * 6); }
+    
+    // Helper to determine how many students a prof starts with
+    getCountForRank: function(rank) { 
+        return rank === "Adjunct" ? 0 : 5 + Math.floor(Math.random() * 6); 
+    }
 };
 
+/* js/state.js */
+
+/* js/state.js */
+
+/* js/state.js */
+
+/* js/state.js */
+
 const FacultyGenerator = {
-    generate: function(rank, field) {
-        const salary = FINANCE.SALARIES[rank] || 85000;
-        const grants = [];
+    // UPDATED: Now accepts 'forcedYearsIn' to manually set tenure progress
+    generate: function(rank, field, forcedYearsIn = null) {
+        
+        // 1. Setup Basics
+        const salary = (typeof FINANCE !== 'undefined' && FINANCE.SALARIES) ? (FINANCE.SALARIES[rank] || 85000) : 85000;
         const agencies = ["NSF", "NIH", "DOE", "DOD"];
-        let grantCount = 0;
-        if(rank === "Full") grantCount = Math.floor(Math.random() * 3) + 2; 
-        if(rank === "Associate") grantCount = Math.floor(Math.random() * 2) + 1;
-        if(rank === "Assistant" && Math.random() > 0.5) grantCount = 1;
-
-        for(let i=0; i<grantCount; i++) {
-            const agency = agencies[Math.floor(Math.random()*agencies.length)];
-            grants.push({ name: `${agency} Grant`, remaining: 200000 + Math.floor(Math.random() * 400000) });
-        }
-
         const fullName = ApplicantGenerator.generateName(false);
+        
+        let age = 30 + Math.floor(Math.random() * 5);
+        let hIndex = 4 + Math.floor(Math.random() * 8);
+        
+        // Randomize reserves
+        let funds = 50000 + Math.floor(Math.random() * 200000); 
+        
+        if (rank === "Associate") { age += 7; hIndex += 15; funds += 150000; }
+        if (rank === "Full") { age += 15; hIndex += 25; funds += 300000; }
+
+        const grants = [];
+        let tenureTrack = null;
+        let yearsIn = 0;
+
+        // --- ASSISTANT PROFESSOR LOGIC ---
+        if (rank === "Assistant") {
+            // LOGIC CHANGE: Use forced year if provided, otherwise random
+            if (forcedYearsIn !== null) {
+                yearsIn = forcedYearsIn;
+            } else {
+                yearsIn = Math.floor(Math.random() * 5); 
+            }
+            
+            let currentYear = 1;
+            if (typeof State !== 'undefined' && State.data && State.data.year) {
+                currentYear = State.data.year;
+            }
+
+            // Backfill Stats
+            // BUFFED: Increased multiplier slightly to ensure they have history
+            const pastPubs = Math.floor(yearsIn * (2.0 + Math.random())); 
+            const pastGrants = Math.floor(yearsIn * 0.4); 
+            
+            hIndex += pastPubs; 
+
+            tenureTrack = {
+                active: true,
+                year: yearsIn + 1, 
+                startYear: currentYear - yearsIn,
+                clock: 7,
+                nextReview: currentYear + (7 - yearsIn),
+                stats: {
+                    totalPubs: pastPubs,
+                    totalGrants: pastGrants,
+                    studentsGraduated: 0 
+                },
+                history: [] 
+            };
+
+            // Starter Grant
+            if (yearsIn > 1 || Math.random() > 0.6) {
+                const totalAmount = 450000;
+                grants.push({
+                    name: "NSF Standard Grant",
+                    source: "NSF",
+                    amount: totalAmount, 
+                    remaining: 200000 + Math.floor(Math.random() * 150000),
+                    duration: 3,
+                    yearAwarded: currentYear - 1
+                });
+            }
+            
+            if (yearsIn === 0) funds += 300000; 
+            else funds += 50000;
+
+        } else {
+            // --- SENIOR FACULTY LOGIC ---
+            let grantCount = 0;
+            if (rank === "Full") grantCount = Math.floor(Math.random() * 3) + 2; 
+            if (rank === "Associate") grantCount = Math.floor(Math.random() * 2) + 1;
+
+            for(let i=0; i<grantCount; i++) {
+                const agency = agencies[Math.floor(Math.random()*agencies.length)];
+                const totalAmount = 300000 + Math.floor(Math.random() * 500000);
+                
+                grants.push({ 
+                    name: `${agency} Grant`, 
+                    source: agency,
+                    amount: totalAmount, 
+                    remaining: Math.floor(totalAmount * (0.2 + Math.random() * 0.6)) 
+                });
+            }
+        }
 
         return {
             id: Date.now() + Math.random(),
             name: `Dr. ${fullName}`,
-            rank: rank, rankLabel: rank, field: field, tenured: (rank === "Full" || rank === "Associate"),
-            salary: salary, age: 30 + Math.floor(Math.random()*25), hIndex: Math.floor(Math.random()*30),
-            students: [], grants: grants, pendingApps: [], funds: 10000, burnRate: 0, fundingSourceLabel: "Grants", runway: "Inf",
-            happiness: 80
+            rank: rank, 
+            rankLabel: rank, 
+            field: field, 
+            tenured: (rank === "Full" || rank === "Associate"),
+            salary: salary, 
+            age: age, 
+            hIndex: hIndex,
+            students: [], 
+            grants: grants, 
+            pendingApps: [], 
+            funds: funds, 
+            burnRate: 0, 
+            burnBreakdown: "", 
+            fundingSourceLabel: "Grants", 
+            runway: "Inf",
+            happiness: 80,
+            tenureTrack: tenureTrack
         };
     },
+    /* js/state.js */
+
+    /* js/state.js */
+
     /* js/state.js */
 
     /* js/state.js */
@@ -1427,9 +1702,6 @@ const FacultyGenerator = {
     /* js/state.js */
 
     recalcFacultyFinances: function(prof) {
-        // Debug line to prove new code is running
-        console.log(`Calculating Variable Costs for ${prof.name}...`);
-
         let weeklyBurn = this.COSTS.LAB_BASE;
         const myStudents = this.data.students.filter(s => s.advisorId === prof.id);
         const pol = this.data.policy; 
@@ -1441,15 +1713,14 @@ const FacultyGenerator = {
         let fellowCount = 0;
 
         myStudents.forEach(s => {
-            // --- VARIABLE COST LOGIC ---
-            // 1. Generate a stable seed based on Student ID + Day
-            // This ensures the number changes daily, but doesn't flicker if you hover
+            // --- STABLE RANDOMIZATION ---
+            // We use the student ID + Current Day as a seed. 
+            // This ensures the cost is fixed for the day (no flickering) but changes over time.
             const seed = (s.id || 0) + (this.data.day * 100) + (this.data.year * 1000);
-            const pseudoRand = Math.abs(Math.sin(seed) * 10000) % 1; 
+            const pseudoRand = Math.abs(Math.sin(seed) * 10000) % 1; // 0.0 to 1.0
             
-            // 2. Set Cost: Min $350, Max $750. 
-            // Note: We deliberately IGNORE this.COSTS.SUPPLIES_WEEKLY (which is 300)
-            const chemCost = 350 + Math.floor(pseudoRand * 401); 
+            // Range: $350 to $750 (Average $550)
+            const chemCost = 350 + Math.floor(pseudoRand * 401);
 
             suppliesCost += chemCost;
             weeklyBurn += chemCost;
@@ -1466,17 +1737,17 @@ const FacultyGenerator = {
             }
         });
 
-        // Store Monthly Burn
+        // Store monthly burn
         prof.burnRate = weeklyBurn * 4.3; 
         
-        // Build Breakdown String
+        // Build the Display String
         let parts = [];
         parts.push(`Lab Maintenance: $${this.COSTS.LAB_BASE}`);
         
         if(suppliesCost > 0) {
+            // Calculate average for the display
             const avg = Math.round(suppliesCost / myStudents.length);
-            // We explicitly show the average here so you can verify it's > 300
-            parts.push(`Chemicals (Variable): $${suppliesCost} (Avg $${avg}/student)`);
+            parts.push(`Chemicals & Supplies: $${suppliesCost} (Avg $${avg}/student)`);
         }
         
         if(raCost > 0) parts.push(`RA Stipends: $${raCost.toFixed(0)} (${raCount} students)`);
