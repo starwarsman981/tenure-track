@@ -92,6 +92,47 @@ const State = {
     },
 
   advanceDay: function() {
+    // --- NEW: PROCESS TIMED EVENTS ---
+        if(this.data.timedEvents && this.data.timedEvents.length > 0) {
+            // Loop backwards so we can splice safely
+            for (let i = this.data.timedEvents.length - 1; i >= 0; i--) {
+                const ev = this.data.timedEvents[i];
+                
+                // Check if date has arrived (or passed)
+                const isTime = (this.data.year > ev.year) ||
+                               (this.data.year === ev.year && this.data.month > ev.month) ||
+                               (this.data.year === ev.year && this.data.month === ev.month && this.data.day >= ev.day);
+
+                if (isTime) {
+                    if (ev.type === 'late_apps') {
+                        // 1. Find the Prof
+                        const prof = this.data.faculty.find(f => f.id === ev.profId);
+                        
+                        // 2. Generate Students (Only if prof still exists)
+                        if (prof) {
+                            const newApps = ApplicantGenerator.generatePool([prof], 1.1, 0.2); 
+                            
+                            newApps.forEach(app => {
+                                app.facultyNote = "Late Applicant (Heard about new hire)";
+                                app.interest = ev.profField;
+                                app.matches = [{ name: ev.profName, reason: "New Lab Opening" }];
+                            });
+
+                            this.data.admissions.pool.push(...newApps);
+
+                            // 3. SEND THE EMAIL (The "As Well" part)
+                            this.addEmail("Grad Admissions", "Late Applications Arrived", 
+                                `Word has spread about ${ev.profName}'s hiring.<br><br>
+                                We just received <strong>${newApps.length} late applications</strong> specifically targeting their lab.<br>
+                                You should review them immediately in the Admissions tab.`, "urgent");
+                        }
+                    }
+                    // Remove executed event
+                    this.data.timedEvents.splice(i, 1);
+                }
+            }
+        }
+        // ---------------------------------
         // 1. INCREMENT TIME
         this.data.day++;
         
@@ -141,7 +182,7 @@ const State = {
             const high = estimatedCapacity + 2;
 
             this.addEmail("Grad Admissions Cmte", "ACTION REQUIRED: Set Cohort Size", 
-                `We have analyzed the department's lab capacity.<br><br>
+                `We have analyzed the department's lab capacity. We recommend between $${low} and $${high} students. Although, this is up to your discretion provided you can find the funds.<br><br>
                 <strong>Active Research Labs:</strong> ${activeLabs}<br>
                 <strong>Recommended Cohort:</strong> ${low} - ${high} students<br><br>
                 <button class="btn-main" onclick="UI.showRecruitmentSetupModal()">Configure Recruitment</button>`, "urgent");
@@ -280,108 +321,166 @@ const State = {
         }
     },
 
+    /* js/state.js */
+
     processResearchOutput: function() {
         this.data.faculty.forEach(f => {
             const myStudents = this.data.students.filter(s => s.advisorId === f.id);
             if(myStudents.length === 0) return;
+            
             let totalBrains = 0; let totalHands = 0;
             myStudents.forEach(s => { totalBrains += s.stats.brains; totalHands += s.stats.hands; });
-            const power = totalBrains + totalHands;
-            if(Math.random() < (power / 42000)) { this.triggerDiscovery(f); }
+            
+            // OLD FORMULA: Linear (10 students = 2x output of 5)
+            // const power = totalBrains + totalHands;
+            // if(Math.random() < (power / 42000)) ...
+
+            // NEW FORMULA: Weighted by Size (10 students = ~2.5x output of 5)
+            // We multiply raw stat power by the square root of the student count.
+            // This simulates that larger teams have more synergy/resources.
+            const power = (totalBrains + totalHands) * Math.sqrt(myStudents.length);
+            
+            // Lower divisor = More frequent papers overall
+            if(Math.random() < (power / 25000)) { this.triggerDiscovery(f); }
         });
     },
 
+    /* js/state.js */
+
+    /* js/state.js */
+
     triggerDiscovery: function(prof) {
-        // Generate Title
+        // 1. Generate Title
         const adj = RESEARCH_DB.ADJECTIVES[Math.floor(Math.random() * RESEARCH_DB.ADJECTIVES.length)];
         const method = RESEARCH_DB.METHODS[Math.floor(Math.random() * RESEARCH_DB.METHODS.length)];
         const target = RESEARCH_DB.TARGETS[Math.floor(Math.random() * RESEARCH_DB.TARGETS.length)];
         const app = RESEARCH_DB.APPLICATIONS[Math.floor(Math.random() * RESEARCH_DB.APPLICATIONS.length)];
         const title = `A ${adj} ${method} of ${target} for ${app}`;
         
-        // NEW 1-10 Scale Logic
+        // 2. Journal Selection & Dynamic Impact Factor
         const journals = [
-            { name: "Nature", impact: 9.9 },
-            { name: "Science", impact: 9.5 },
-            { name: "JACS", impact: 6.5 },
-            { name: "Angewandte", impact: 6.0 },
-            { name: "Chem. Sci.", impact: 3.5 },
-            { name: "Tetrahedron", impact: 1.2 }
+            { name: "Nature", base: 9.5, variance: 0.5 },
+            { name: "Science", base: 9.2, variance: 0.6 },
+            { name: "JACS", base: 6.2, variance: 0.8 },
+            { name: "Angewandte", base: 5.8, variance: 0.8 },
+            { name: "Chem. Sci.", base: 3.2, variance: 1.5 },
+            { name: "Tetrahedron", base: 1.0, variance: 1.2 }
         ];
         
         const roll = (prof.hIndex / 3) + (Math.random() * 20); 
-        let journal = journals[5]; 
-        if(roll > 40) journal = journals[0];
-        else if(roll > 35) journal = journals[1];
-        else if(roll > 25) journal = journals[2];
-        else if(roll > 20) journal = journals[3];
-        else if(roll > 10) journal = journals[4];
+        let jObj = journals[5]; 
+        if(roll > 40) jObj = journals[0];
+        else if(roll > 35) jObj = journals[1];
+        else if(roll > 25) jObj = journals[2];
+        else if(roll > 20) jObj = journals[3];
+        else if(roll > 10) jObj = journals[4];
 
-        // Give credit to students
+        const realImpact = jObj.base + (Math.random() * jObj.variance);
+        
+        // 3. Realistic Author List Generation
         const myStudents = this.data.students.filter(s => s.advisorId === prof.id);
-        let firstAuthor = "Postdoc J. Doe";
-        let coAuthors = "";
+        let authorString = `${prof.name}*`; 
         
         if (myStudents.length > 0) {
-            myStudents.sort((a,b) => b.stats.hands - a.stats.hands);
-            firstAuthor = myStudents[0].name;
-            myStudents[0].pubs = (myStudents[0].pubs || 0) + 1; // Increment student paper count
-            if(myStudents.length > 1) {
-                coAuthors = ", " + myStudents.slice(1, Math.min(4, myStudents.length)).map(s => s.name.split(' ')[1]).join(', ');
-            }
+            // A. First Author: Student with best 'Hands'
+            const sortedStudents = [...myStudents].sort((a,b) => b.stats.hands - a.stats.hands);
+            const firstAuthor = sortedStudents[0];
+            
+            // Helper to format name: "J. Smith (G3)"
+            const fmt = (s) => {
+                const parts = s.name.split(' ');
+                // If name already has (G#), use it, otherwise add it
+                if(s.name.includes('(G')) return `${parts[0].charAt(0)}. ${parts.slice(1).join(' ')}`;
+                return `${parts[0].charAt(0)}. ${parts[1]} (G${s.year})`;
+            };
+
+            firstAuthor.pubs = (firstAuthor.pubs || 0) + 1;
+
+            // B. Middle Authors: 2 to 5 random others
+            const potentialMiddle = myStudents.filter(s => s.id !== firstAuthor.id);
+            
+            // Randomly pick between 2 and 5, capped by how many students actually exist
+            let targetCount = Math.floor(Math.random() * 4) + 2; // 2, 3, 4, or 5
+            targetCount = Math.min(targetCount, potentialMiddle.length);
+            
+            const middleAuthors = potentialMiddle
+                .sort(() => 0.5 - Math.random()) // Shuffle
+                .slice(0, targetCount)
+                .map(s => fmt(s));
+
+            // C. Construct String
+            let midStr = "";
+            if (middleAuthors.length > 0) midStr = ", " + middleAuthors.join(", ");
+            
+            authorString = `${fmt(firstAuthor)}${midStr}, ${prof.name}*`;
         }
 
-        // Apply Rewards
-        prof.hIndex += Math.ceil(journal.impact); 
-        this.data.prestige += Math.ceil(journal.impact / 2);
-
-        // Calculate Citations & Save Record
-        const citations = Math.floor(journal.impact * (5 + Math.random() * 20));
+        // 4. Apply Rewards
+        prof.hIndex += Math.ceil(realImpact); 
+        this.data.prestige += Math.ceil(realImpact / 2);
         
-        // Ensure the list exists before pushing (safety check)
-        if(!this.data.publications) this.data.publications = [];
+        if(prof.tenureTrack && prof.tenureTrack.active) {
+            prof.tenureTrack.stats.totalPubs++;
+        }
 
-       this.data.publications.push({
-         title: title,
-         journal: journal.name,
-          impact: journal.impact,
-           citations: 0,              // Start at 0
-           age: 0,                    // New paper (0 weeks old)
-           author: prof.name,
-          authorHIndex: prof.hIndex, // Capture author fame at time of publishing
-          year: this.data.year
+        // Save Record
+        if(!this.data.publications) this.data.publications = [];
+        this.data.publications.push({
+            title: title,
+            journal: jObj.name,
+            impact: realImpact, 
+            citations: 0,
+            age: 0,
+            author: prof.name,
+            authorHIndex: prof.hIndex,
+            year: this.data.year
         });
 
-        // Email Notification Logic
-        let comment = "";
-        let color = "#7f8c8d";
-        if (journal.impact > 9) {
-            comment = "This is career-defining work. The press office needs to run a story on this.";
-            color = "#8e44ad"; 
-        } else if (journal.impact > 6) {
-            comment = "Solid work. The students really ground this one out over the holidays.";
-            color = "#2980b9"; 
-        } else {
-            comment = "It's a small contribution, but good for the first-year students to get their names on a paper.";
-            color = "#7f8c8d";
-        }
+        // 5. Dynamic Email Flavor Text
+        const FLAVOR = {
+            HIGH: [
+                "This is career-defining work. The press office needs to run a story on this.",
+                "We finally beat the reviewers. This is going to be a classic.",
+                "The editors highlighted this as a 'Hot Paper'. Very proud of the team.",
+                "It took 3 years and 4 revisions, but we finally landed the big one."
+            ],
+            MED: [
+                "Solid work. The students really ground this one out over the holidays.",
+                "A good consistent addition to our funding portfolio.",
+                "Reviewer #3 was a nightmare, but we got it through.",
+                "Nice validation of our hypothesis. Good for the grad students' CVs."
+            ],
+            LOW: [
+                "It's a small contribution, but good for the first-year students to get their names on a paper.",
+                "Salvaged some negative data into a decent technical note.",
+                "Just keeping the publication count moving while we work on the big project.",
+                "Invited submission to a special issue. Low impact, but easy acceptance."
+            ]
+        };
 
+        let commentList = FLAVOR.LOW;
+        let color = "#7f8c8d";
+        if (realImpact > 9) { commentList = FLAVOR.HIGH; color = "#8e44ad"; }
+        else if (realImpact > 6) { commentList = FLAVOR.MED; color = "#2980b9"; }
+        
+        const randomComment = commentList[Math.floor(Math.random() * commentList.length)];
+
+        // 6. Send Email
         const body = `
             <div style="border-left: 4px solid ${color}; padding-left: 10px; margin-bottom: 15px;">
-                <div style="font-size:1.1rem; font-weight:bold; color:${color};">${journal.name} Accepted</div>
+                <div style="font-size:1.1rem; font-weight:bold; color:${color};">${jObj.name} Accepted</div>
                 <div style="font-style:italic; margin-bottom:5px;">"${title}"</div>
                 <div style="font-size:0.9rem;">
-                    <strong>Authors:</strong> ${firstAuthor}${coAuthors}, ${prof.name}*<br>
-                    <strong>Impact Factor:</strong> ${journal.impact.toFixed(1)} / 10
+                    <strong>Authors:</strong> ${authorString}<br>
+                    <strong>Impact Factor:</strong> ${realImpact.toFixed(2)} / 10
                 </div>
             </div>
-            <p>"${comment}"</p>
+            <p>"${randomComment}"</p>
             <p>Best,<br>${prof.name.split(' ').slice(-1)[0]}</p>
         `;
 
-        this.addEmail(prof.name, `Pub Accepted: ${journal.name}`, body, 'paper');
+        this.addEmail(prof.name, `Pub Accepted: ${jObj.name}`, body, 'paper');
     },
-
     /* Paste this AFTER triggerDiscovery, inside the State object */
 
     updateCitations: function() {
@@ -712,12 +811,20 @@ processGrantCycle: function() {
             UI.renderInbox(this.data.emails); 
         }
     },
+   
+
     startFacultySearch: function() {
         this.data.facultySearch.active = true;
         this.data.facultySearch.phase = "ads";
         this.data.budget -= 5000;
+        
+        // --- THE FIX: CLEAR THE LIST ---
+        this.data.facultySearch.shortlist = []; 
+        this.data.facultySearch.pool = []; // Good practice to clear this too
+        // -------------------------------
+
         this.addEmail("Search Cmte", "Job Ad Posted", "We have posted the ad in Science and Nature Jobs. Applications will arrive in October. (-$5,000)");
-        // Trigger pool generation later
+        
         this.data.pendingEvent = { title: "Search Active", desc: "Ads are running.", choices: [{text:"OK", cost:0, flavor:"Good", effect:"none"}]};
     },
     
@@ -777,7 +884,7 @@ processGrantCycle: function() {
         c.status = "Shortlist";
         this.data.facultySearch.shortlist.push(c);
         this.data.budget -= 1500;
-        this.addEmail("Travel", "Flyout Booked", `Flight booked for ${c.name}. (-$1,500)`);
+        this.addEmail("Travel", "Flyout Booked", `Flight booked for ${c.name}. They will arrive in early November to do an interview and negotiate if you desire. (-$1,500)`);
         if(typeof UI !== 'undefined') UI.renderFacultySearch(this.data);
     },
     interviewFaculty: function(cId, qId) {
@@ -803,6 +910,10 @@ processGrantCycle: function() {
         }
     },
 
+    /* js/state.js */
+
+    /* js/state.js */
+
     makeFacultyOffer: function(id, offerAmount) {
         const c = this.data.facultySearch.pool.find(x => x.id === id);
         if(!c) return;
@@ -819,54 +930,65 @@ processGrantCycle: function() {
             this.data.budget -= offerAmount;
             
             // 2. CREATE PROFESSOR
-            // Use their specific field (Organic, Physical, etc)
             const newProf = FacultyGenerator.generate("Assistant", c.field || "Physical"); 
-            newProf.name = "Dr. " + c.name.split(' ')[1]; 
+            newProf.name = "Dr. " + c.name; // <--- NEW (Dr. John Smith)
             newProf.funds = offerAmount; 
             newProf.runway = "2.0 yrs";
             newProf.happiness = 100;
             
-            // 3. ATTACH TENURE TRACKER (CRITICAL FIX)
             newProf.tenureTrack = {
-                active: true,
-                year: 1, // They start at Year 1
-                stats: {
-                    totalPubs: 0,
-                    totalGrants: 0,
-                    studentsRecruited: 0,
-                    studentsGraduated: 0
-                },
+                active: true, year: 1, 
+                stats: { totalPubs: 0, totalGrants: 0, studentsRecruited: 0, studentsGraduated: 0 },
                 history: []
             };
             
             this.data.faculty.push(newProf);
             
-            // 4. SEND EMAILS
-            // Candidate Acceptance
+            // 3. IMMEDIATE EMAILS (Hiring Confirmation)
             this.addEmail(c.name, "Offer Accepted", 
-                `I am thrilled to accept. The startup package of $${offerAmount.toLocaleString()} is generous. I will begin setting up my lab immediately.`);
+                `I am thrilled to accept. I will begin setting up my lab immediately.`);
 
-            // Formal Announcement (The one you requested)
             this.addEmail("Dean's Office", "New Faculty Hire Confirmed", 
-                `<div style="padding:15px; background:#f4fef6; border:1px solid #2ecc71; color:#27ae60;">
-                    <strong>HR Notification</strong><br>
-                    Dr. ${newProf.name} has been added to the payroll.<br>
-                    <strong>Rank:</strong> Assistant Professor (Tenure-Track)<br>
-                    <strong>Clock:</strong> Year 1 of 6<br>
-                    <strong>Start Date:</strong> Immediate
-                </div>
-                <p>Please assign them office space and ensure they begin recruiting students next cycle.</p>`);
+                `Dr. ${newProf.name} has been added to the payroll. Start Date: Immediate.`);
             
-            // 5. CLOSE SEARCH
+            // 4. CLOSE SEARCH
             this.data.facultySearch.active = false;
             this.data.facultySearch.phase = "complete";
             this.data.facultySearch.pool = []; 
 
+            // --- 5. SCHEDULE DELAYED LATE APPLICANTS (3 WEEKS) ---
+            if(this.data.admissions.active) {
+                // Calculate Target Date (Current + 21 Days)
+                let tDay = this.data.day + 21;
+                let tMonth = this.data.month;
+                let tYear = this.data.year;
+                
+                // Handle Month Rollover
+                if (tDay > 30) {
+                    tDay -= 30;
+                    tMonth++;
+                    if(tMonth > 11) { tMonth = 0; tYear++; }
+                }
+
+                // Initialize array if missing
+                if(!this.data.timedEvents) this.data.timedEvents = [];
+
+                // Push Event
+                this.data.timedEvents.push({
+                    type: 'late_apps',
+                    year: tYear, month: tMonth, day: tDay,
+                    profId: newProf.id,
+                    profName: newProf.name,
+                    profField: newProf.field
+                });
+            }
+            // ----------------------------------------------------
+
         } else {
-            this.addEmail(c.name, "Offer Declined", `The startup package ($${offerAmount.toLocaleString()}) is insufficient for my needs ($${c.startupAsk.toLocaleString()}).`);
+            this.addEmail(c.name, "Offer Declined", `The startup package was insufficient.`);
             c.status = "Declined";
         }
-        //PUT IT HERE?!?!?
+
         if(typeof UI !== 'undefined') UI.renderFacultySearch(this.data);
     },
     processAcademicYearRollover: function() {
@@ -931,7 +1053,8 @@ processGrantCycle: function() {
         this.data.admissions.active = false;
         this.data.admissions.setupComplete = false; // <--- THIS LINE FIXES THE BUG
         // ------------------------------------------
-
+        // ADD THIS LINE:
+        this.data.admissions.strategyRequested = false; // <--- RESET THE TRIGGER
         // 5. FUNDING SHUFFLE (Re-evaluate RA/TA status)
         let raCount = 0;
         let taCount = 0;
@@ -1062,19 +1185,68 @@ const FinanceSystem = {
     }
 };
 
+/* js/state.js */
+
 const ApplicantGenerator = {
     firstNames: [
+        // US / UK / Western
         "James","Mary","John","Patricia","Robert","Jennifer","Michael","Linda","William","Elizabeth",
         "David","Barbara","Richard","Susan","Joseph","Jessica","Thomas","Sarah","Charles","Karen",
-        "Wei","Li","Hao","Min","Jun","Ying","Lei","Jin","Sora","Haruto","Yuna","Kenji",
+        "Christopher","Lisa","Daniel","Nancy","Matthew","Betty","Anthony","Margaret","Mark","Sandra",
+        "Steven","Ashley","Paul","Kimberly","Andrew","Emily","Joshua","Donna","Kenneth","Michelle",
+        "Kevin","Carol","Brian","Amanda","George","Melissa","Edward","Deborah","Ronald","Stephanie",
+        "Timothy","Rebecca","Jason","Laura","Jeffrey","Helen","Ryan","Sharon","Jacob","Cynthia",
+        
+        // East Asian (Chinese, Japanese, Korean)
+        "Wei","Li","Hao","Min","Jun","Ying","Lei","Jin","Xiang","Bo","Cheng","Dong","Fang","Gang",
+        "Sora","Haruto","Yuna","Kenji","Hiro","Akira","Yuki","Ren","Sakura","Hina","Kaito","Riku",
+        "Ji-woo","Min-jun","Seo-jun","Ha-eun","Do-yun","Ji-yoo","Si-woo","Su-ah","Joo-won","Ye-jun",
+        
+        // South Asian (Indian)
         "Aarav","Priya","Vihaan","Ananya","Aditya","Diya","Arjun","Saanvi","Rohan","Ishaan",
-        "Lukas","Emma","Matteo","Sofia","Hugo","Camille","Lars","Anna","Dimitri","Elena"
+        "Sai","Aarya","Reyansh","Myra","Krishna","Zara","Ishita","Vivaan","Kavya","Dhruv",
+        
+        // European (German, French, Italian, Spanish, Slavic)
+        "Lukas","Emma","Matteo","Sofia","Hugo","Camille","Lars","Anna","Dimitri","Elena",
+        "Gabriel","Alice","Leo","Chloé","Louis","Ines","Adam","Lena","Noah","Mia",
+        "Luca","Giulia","Alessandro","Martina","Lorenzo","Chiara","Leonardo","Aurora",
+        "Santiago","Mateo","Sebastian","Valentina","Matias","Isabella","Nicolas","Camila",
+        "Ivan","Maria","Maxim","Anastasia","Artem","Daria","Mikhail","Polina",
+        
+        // Middle Eastern
+        "Mohammed","Fatima","Ahmed","Aisha","Ali","Maryam","Omar","Layla","Youssef","Noor",
+        "Ibrahim","Zainab","Hassan","Salma","Hussein","Sara","Abdullah","Jana"
     ],
+    
     lastNames: [
+        // English / Common
         "Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez",
+        "Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin",
+        "Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson",
+        "Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores",
+        
+        // Chinese
         "Wang","Li","Zhang","Liu","Chen","Yang","Huang","Zhao","Wu","Zhou",
-        "Patel","Singh","Sharma","Kumar","Gupta","Rao","Shah","Mehta",
-        "Müller","Schmidt","Dubois","Leroy","Rossi","Russo","Ivanov","Smirnov"
+        "Xu","Sun","Ma","Zhu","Hu","Guo","He","Lin","Gao","Luo",
+        
+        // Indian
+        "Patel","Singh","Sharma","Kumar","Gupta","Rao","Shah","Mehta","Jain","Verma",
+        "Mishra","Reddy","Nair","Kapoor","Malhotra","Bhat","Saxena","Iyer","Chopra","Das",
+        
+        // Japanese
+        "Sato","Suzuki","Takahashi","Tanaka","Watanabe","Ito","Yamamoto","Nakamura","Kobayashi","Kato",
+        
+        // Korean
+        "Kim","Park","Jeong","Choi","Kang","Yoon","Lim","Shin","Han","Oh",
+        
+        // European
+        "Müller","Schmidt","Schneider","Fischer","Weber","Meyer","Wagner","Becker","Schulz","Hoffmann", // German
+        "Dubois","Leroy","Moreau","Simon","Laurent","Lefebvre","Michel","Garcia","David","Bertrand", // French
+        "Rossi","Russo","Ferrari","Esposito","Bianchi","Romano","Colombo","Ricci","Marino","Greco", // Italian
+        "Ivanov","Smirnov","Kuznetsov","Popov","Vasiliev","Petrov","Sokolov","Mikhailov","Fedorov","Morozov", // Russian
+        
+        // Middle Eastern
+        "Ahmed","Ali","Mohamed","Youssef","Ibrahim","Mahmoud","Hassan","Hussein","Ismail","Khan"
     ],
 
     generateName: function(isInternational) {
@@ -1083,7 +1255,12 @@ const ApplicantGenerator = {
         return `${f} ${l}`;
     },
 
+    // ... (Keep your existing generatePool and getFuzzyStat functions exactly as they were) ...
     generatePool: function(facultyList, qualityMod, volumeMod) {
+        // [PASTE YOUR EXISTING GENERATEPOOL CODE HERE IF YOU NEED TO KEEP IT]
+        // If you just replace the object, make sure to copy the generatePool logic from your previous state.js
+        // or just copy the arrays above and paste them into your existing file.
+        
         const pool = [];
         const baseVolume = 25; 
         const count = Math.floor(baseVolume * volumeMod) + Math.floor(Math.random() * 10);

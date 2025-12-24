@@ -7,7 +7,9 @@ const Game = {
     rosterFilters: { rank: 'all', field: 'all', tenure: 'all', sort: 'hIndex' },
     // Add these two lines to the Game object:
     emailFilter: 'all',
+    emailSearchQuery: '', // <--- NEW STATE
     setEmailFilter: function(val) { this.emailFilter = val; UI.renderInbox(State.data.emails); },
+    setEmailSearch: function(val) { this.emailSearchQuery = val.toLowerCase(); UI.renderInbox(State.data.emails); }, // <--- NEW FUNCTION
     
     // --- UPDATED: ADMISSIONS FILTERS ---
     admissionsFilters: { field: 'all', gpa: 'all', rec: 'all' }, 

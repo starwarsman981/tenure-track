@@ -597,6 +597,9 @@ const UI = {
                         <option value="Organic" ${f.field==='Organic'?'selected':''}>Organic</option>
                         <option value="Inorganic" ${f.field==='Inorganic'?'selected':''}>Inorganic</option>
                         <option value="Physical" ${f.field==='Physical'?'selected':''}>Physical</option>
+                        <option value="Analytical" ${f.field==='Analytical'?'selected':''}>Analytical</option>
+                        <option value="Materials" ${f.field==='Materials'?'selected':''}>Materials</option>
+                        <option value="Biological" ${f.field==='Biological'?'selected':''}>Biological</option>
                     </select>
                     <select onchange="Game.setAdmissionsFilter('gpa', this.value)" style="font-size:0.75rem; flex:1;">
                         <option value="all" ${f.gpa==='all'?'selected':''}>GPA: All</option>
@@ -940,10 +943,12 @@ renderRecords: function(data) {
         overlay.innerHTML = `<div class="dossier-paper" style="max-width:500px;"><h2 style="margin-top:0; border-bottom:2px solid #333; padding-bottom:10px;">${event.title}</h2><p style="font-size:1.1rem; line-height:1.5; color:#444; margin-bottom:20px;">${event.desc}</p><div style="background:#f4f4f4; padding:20px; border:1px solid #ddd;">${choiceHtml}</div></div>`; document.body.appendChild(overlay);
     },
 
+    /* js/ui.js */
+
     renderInbox: function(emails) { 
         const container = this.elements.screens.office; 
         
-        // 1. Setup the Layout (if not exists)
+        // 1. Setup the Layout (Only runs once)
         if (!container.querySelector('.outlook-layout')) { 
             container.innerHTML = `
                 <div class="outlook-layout">
@@ -953,8 +958,12 @@ renderRecords: function(data) {
                                 <span>Inbox</span><span id="unread-count"></span>
                             </div>
                             
+                            <input type="text" placeholder="Search subject or sender..." 
+                                oninput="Game.setEmailSearch(this.value)" 
+                                style="width:100%; padding:8px; border:1px solid #ccc; border-radius:3px; font-size:0.85rem; box-sizing:border-box;">
+                            
                             <select onchange="Game.setEmailFilter(this.value)" style="width:100%; padding:5px; border:1px solid #ccc; border-radius:3px; font-size:0.85rem;">
-                                <option value="all">Show All</option>
+                                <option value="all">Show All Categories</option>
                                 <option value="urgent">⚠️ Dilemmas & Urgent</option>
                                 <option value="paper">📄 Publications</option>
                                 <option value="search">🔎 Faculty Search</option>
@@ -981,46 +990,46 @@ renderRecords: function(data) {
         const listContainer = document.getElementById('email-list-container'); 
         listContainer.innerHTML = ''; 
         
-        // 2. Filter Logic
-        const filter = Game.emailFilter || 'all';
+        // 2. Filter Logic (Combines Category + Search)
+        const catFilter = Game.emailFilter || 'all';
+        const searchFilter = Game.emailSearchQuery || '';
         
         const filteredEmails = emails.filter(e => {
-            if (filter === 'all') return true;
+            // A. Check Category
+            let matchesCategory = false;
+            if (catFilter === 'all') matchesCategory = true;
+            else if (catFilter === 'urgent') matchesCategory = e.category === 'urgent' || e.subject.includes('Action:');
+            else if (catFilter === 'paper') matchesCategory = e.category === 'paper' || e.subject.includes('Accepted');
+            else if (catFilter === 'search') matchesCategory = e.sender.includes('Search') || e.subject.includes('Candidate') || e.subject.includes('Job Ad');
+            else if (catFilter === 'admissions') matchesCategory = e.sender.includes('Admissions') || e.sender.includes('Events') || e.subject.includes('Acceptance') || e.subject.includes('Declined') || e.subject.includes('Visit');
+            else if (catFilter === 'finance') matchesCategory = e.sender === 'Bursar' || e.sender === 'OSP' || e.sender === 'Provost' || e.subject.includes('Grant') || e.subject.includes('Award');
             
-            // Filter: Dilemmas (Urgent red emails)
-            if (filter === 'urgent') return e.category === 'urgent' || e.subject.includes('Action:');
-            
-            // Filter: Papers (Blue notifications)
-            if (filter === 'paper') return e.category === 'paper' || e.subject.includes('Accepted');
-            
-            // Filter: Faculty Search
-            if (filter === 'search') return e.sender.includes('Search') || e.subject.includes('Candidate') || e.subject.includes('Job Ad');
-            
-            // Filter: Admissions (Student offers, acceptances)
-            if (filter === 'admissions') return e.sender.includes('Admissions') || e.sender.includes('Events') || e.subject.includes('Acceptance') || e.subject.includes('Declined') || e.subject.includes('Visit');
-            
-            // Filter: Finance (Bursar, OSP, Grants)
-            if (filter === 'finance') return e.sender === 'Bursar' || e.sender === 'OSP' || e.sender === 'Provost' || e.subject.includes('Grant') || e.subject.includes('Award');
-            
-            return false;
+            // B. Check Search Term (Subject or Sender)
+            let matchesSearch = true;
+            if (searchFilter !== '') {
+                matchesSearch = e.subject.toLowerCase().includes(searchFilter) || 
+                                e.sender.toLowerCase().includes(searchFilter);
+            }
+
+            return matchesCategory && matchesSearch;
         });
 
         // 3. Render List
         let unread = 0; 
-        emails.forEach(e => { if(!e.read) unread++; }); // Count total unread, not just filtered
+        emails.forEach(e => { if(!e.read) unread++; }); 
 
         if (filteredEmails.length === 0) {
-            listContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#999; font-style:italic;">No emails in this folder.</div>`;
+            listContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#999; font-style:italic;">No matching emails.</div>`;
         } else {
             filteredEmails.forEach(email => { 
                 const item = document.createElement('div'); 
                 item.className = `email-item ${email.read ? 'read' : 'unread'}`; 
                 
-                // Add color strip based on type
-                if(email.category === 'urgent') item.style.borderLeftColor = "#c0392b"; // Red
-                else if(email.category === 'paper') item.style.borderLeftColor = "#2980b9"; // Blue
-                else if(email.sender.includes('Search')) item.style.borderLeftColor = "#8e44ad"; // Purple
-                else if(email.sender === 'OSP') item.style.borderLeftColor = "#27ae60"; // Green
+                // Color strips
+                if(email.category === 'urgent') item.style.borderLeftColor = "#c0392b"; 
+                else if(email.category === 'paper') item.style.borderLeftColor = "#2980b9"; 
+                else if(email.sender.includes('Search')) item.style.borderLeftColor = "#8e44ad"; 
+                else if(email.sender === 'OSP') item.style.borderLeftColor = "#27ae60"; 
 
                 item.onclick = () => UI.openEmail(email.id); 
                 item.innerHTML = `
@@ -1031,13 +1040,20 @@ renderRecords: function(data) {
             }); 
         }
         
-        // Update unread count
         const countSpan = document.getElementById('unread-count');
         if(countSpan) countSpan.innerText = unread > 0 ? `${unread} Unread` : ''; 
         
-        // Ensure the dropdown reflects current state (fixes UI glitch if re-rendering)
+        // Restore dropdown value if UI re-renders
         const dropdown = container.querySelector('select');
-        if(dropdown) dropdown.value = filter;
+        if(dropdown) dropdown.value = catFilter;
+        
+        // Restore search focus/value if UI re-renders (Critical for typing!)
+        const input = container.querySelector('input');
+        if(input) {
+            input.value = Game.emailSearchQuery || ''; // Use state, not argument
+            // Only focus if we are actively typing (heuristic: string length > 0)
+            if(Game.emailSearchQuery.length > 0) input.focus();
+        }
     },
 
     openEmail: function(id) { 
@@ -1300,6 +1316,8 @@ renderRecords: function(data) {
     },
 
     // 2. The Faculty Detail (For clicking the Name of ANY professor)
+    /* js/ui.js */
+
     viewFacultyDetail: function(id) {
         const f = State.data.faculty.find(x => x.id === id);
         if(!f) return;
@@ -1307,11 +1325,11 @@ renderRecords: function(data) {
         // Get Students
         const students = State.data.students.filter(s => s.advisorId === id);
         
-        // Sort students: RA first, then TA, then Fellow
+        // Sort students: RA first, then TA, then Fellow, then by Year
         students.sort((a,b) => {
             if(a.funding === 'RA' && b.funding !== 'RA') return -1;
             if(a.funding !== 'RA' && b.funding === 'RA') return 1;
-            return b.year - a.year; // Then by seniority
+            return b.year - a.year; 
         });
 
         const studentRows = students.map(s => {
@@ -1320,11 +1338,16 @@ renderRecords: function(data) {
             if(s.funding === "TA") badgeColor = "#c0392b"; // Red
             if(s.funding === "Fellowship") badgeColor = "#f1c40f"; // Gold
 
+            // --- THE FIX ---
+            // Define the title based on year (3+ is Candidate, 1-2 is Student)
+            const title = s.year > 2 ? "Candidate" : "Student";
+            // ---------------
+
             return `
             <div style="display:flex; justify-content:space-between; border-bottom:1px solid #eee; padding:8px 0; align-items:center;">
                 <div>
                     <div style="font-weight:bold;">${s.name.split(' (')[0]}</div>
-                    <div style="font-size:0.8rem; color:#666;">Year ${s.year} Candidate</div>
+                    <div style="font-size:0.8rem; color:#666;">Year ${s.year} ${title}</div>
                 </div>
                 <div style="text-align:right;">
                     <span style="background:${badgeColor}; color:white; padding:2px 6px; border-radius:4px; font-size:0.75rem; font-weight:bold;">${s.funding}</span>
@@ -1336,7 +1359,7 @@ renderRecords: function(data) {
         }).join('');
 
         const overlay = document.createElement('div');
-        overlay.className = 'dossier-overlay'; // Reuse the existing overlay CSS
+        overlay.className = 'dossier-overlay'; 
         overlay.innerHTML = `
             <div class="dossier-paper" style="width:600px; max-height:90vh; overflow-y:auto;">
                 <div style="border-bottom:2px solid #2c3e50; padding-bottom:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
