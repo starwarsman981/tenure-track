@@ -1,5 +1,4 @@
-﻿/* js/main.js */
-/* js/main.js */
+﻿
 const Game = {
     timer: null,
     currentSpeed: 0, 

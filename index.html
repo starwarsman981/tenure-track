@@ -26,20 +26,20 @@
             <h2 style="margin-top:0; border-bottom:1px solid #ccc; padding-bottom:10px; color:#2c3e50; font-family:'Georgia', serif;">Department Setup</h2>
 
             <div class="form-group">
-                <label>Department Name</label>
-                <input type="text" id="setup-name" value="Dept. of Chemistry">
+                <label>School Name</label>
+                <input type="text" id="setup-name" value="State University">
             </div>
 
             <div class="form-group">
                 <label>Your Last Name</label>
                 <div style="display:flex; align-items:center; gap:10px;">
                     <span style="font-weight:bold; font-family:'Georgia', serif; font-size:1.1rem; color:#2c3e50;">Dr.</span>
-                    <input type="text" id="setup-player-name" value="Smith" style="flex:1;">
+                    <input type="text" id="setup-player-name" value="Doom" style="flex:1;">
                 </div>
             </div>
 
             <div class="form-group">
-                <label>Institution Type</label>
+                <label>Institution Type(State Only currently)</label>
                 <select id="setup-type" onchange="Game.updateSetupFlavor()">
                     <option value="state">State University</option>
                     <option value="ivy">Private Ivy (Not Implemented)</option>
@@ -48,7 +48,7 @@
             </div>
 
             <div class="form-group">
-                <label>Discipline</label>
+                <label>Discipline(Chemistry Only currently)</label>
                 <select id="setup-discipline" onchange="Game.updateSetupFlavor()">
                     <option value="chemistry">Chemistry</option>
                 </select>
@@ -194,7 +194,7 @@
     <script src="js/events.js"></script>
     <script src="js/state.js"></script>
     <script src="js/ui.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/game.js"></script>
 
     <div id="modal-overlay" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; display:flex; justify-content:center; align-items:center;">
         <div id="modal-cv" style="background:#fdfbf7; width:500px; max-width:90%; padding:30px; border-radius:2px; box-shadow:0 10px 25px rgba(0,0,0,0.3); position:relative; font-family:'Georgia', serif; color:#333;">

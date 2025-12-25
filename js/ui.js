@@ -210,7 +210,7 @@ const UI = {
             overlay.remove();
         };
     },
-
+    
     renderFinance: function(data, tab) { 
         const container = this.elements.screens.finance; 
         const tabs = [{ id: 'overview', label: 'Dashboard' }, { id: 'budget', label: 'Ledger' }, { id: 'grants', label: 'Grants' }]; 
