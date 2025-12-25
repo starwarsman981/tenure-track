@@ -1,211 +1,207 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Tenure Track: Department Chair Simulator</title>
-	<link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenure Track: Department Chair Simulator</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-	<div id="main-menu">
-		<div class="title">Tenure Track</div>
-		<div class="subtitle">Department Chair Simulator</div>
+    <div id="main-menu">
+        <div class="title">Tenure Track</div>
+        <div class="subtitle">Department Chair Simulator</div>
 
-		<button class="btn-main" onclick="Game.showSetup()">New Game</button>
+        <button class="btn-main" onclick="Game.showSetup()">New Game</button>
 
-		<input type="file" id="load-file" style="display:none" onchange="State.loadGame(this)">
-		<button class="btn-main" onclick="document.getElementById('load-file').click()">Load Game</button>
+        <input type="file" id="load-file" style="display:none" onchange="State.loadGame(this)">
+        <button class="btn-main" onclick="document.getElementById('load-file').click()">Load Game</button>
 
-		<button class="btn-main" onclick="alert('Settings: Volume [100%], Text Speed [Fast]')">Settings</button>
-		<button class="btn-main" onclick="alert('Tenure Track Simulator\nDesign & Code by You & Gemini')">Credits</button>
-	</div>
+        <button class="btn-main" onclick="alert('Settings: Volume [100%], Text Speed [Fast]')">Settings</button>
+        <button class="btn-main" onclick="alert('Tenure Track Simulator\nDesign & Code by You & Gemini')">Credits</button>
+    </div>
 
-	<div id="setup-screen" class="hidden">
-		<div class="paper-form">
-			<h2 style="margin-top:0; border-bottom:1px solid #ccc; padding-bottom:10px; color:#2c3e50; font-family:'Georgia', serif;">Department Setup</h2>
+    <div id="setup-screen" class="hidden">
+        <div class="paper-form">
+            <h2 style="margin-top:0; border-bottom:1px solid #ccc; padding-bottom:10px; color:#2c3e50; font-family:'Georgia', serif;">Department Setup</h2>
 
-			<div class="form-group">
-				<label>Department Name</label>
-				<input type="text" id="setup-name" value="Dept. of Chemistry">
-			</div>
-
-			<div class="form-group">
-				<label>Institution Type</label>
-				<select id="setup-type" onchange="Game.updateSetupFlavor()">
-					<option value="state">State University</option>
-					<option value="ivy">Private Ivy (Not Implemented)</option>
-					<option value="community">Community College (Not Implemented)</option>
-				</select>
-			</div>
-
-			<div class="form-group">
-				<label>Discipline</label>
-				<select id="setup-discipline" onchange="Game.updateSetupFlavor()">
-					<option value="chemistry">Chemistry</option>
-				</select>
-			</div>
-
-			<div id="setup-desc" style="margin-bottom:20px; font-style:italic; color:#666; min-height:40px;"></div>
-
-			<div class="form-actions">
-				<button class="btn-main" style="width:100%" onclick="Game.initGameFromSetup()">Start Academic Year</button>
-				<button class="btn-small" onclick="document.getElementById('setup-screen').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden');">Back</button>
-			</div>
-		</div>
-	</div>
-
-	<div id="game-interface" class="hidden">
-		<div id="sidebar">
-			<div class="dept-brand">Dept. of Chemistry</div>
-
-			<div id="nav-office" class="nav-item active" onclick="Game.navigate('office')">Dean's Office</div>
-			<div id="nav-calendar" class="nav-item" onclick="Game.navigate('calendar')">Calendar</div>
-			<div id="nav-faculty" class="nav-item" onclick="Game.navigate('faculty')">Faculty Roster</div>
-			<div id="nav-finance" class="nav-item" onclick="Game.navigate('finance')">Finance</div>
-			<div id="nav-students" class="nav-item" onclick="Game.navigate('students')">Grad Students</div>
-			<div id="nav-records" class="nav-item" onclick="Game.navigate('records')">Records</div>
-			<div id="nav-admissions" class="nav-item" onclick="Game.navigate('admissions')">Admissions</div>
-			<div id="nav-search" class="nav-item" onclick="Game.navigate('search')">Faculty Search</div>
-
-			<div class="sidebar-footer">
-				<div style="font-size:0.8rem; opacity:0.6; margin-bottom:10px;">Season 1</div>
-				<button class="btn-small" onclick="State.saveGame()">Save Game</button>
-			</div>
-		</div>
-
-		<div id="content-area">
-			<div id="top-bar">
-				<div id="date-display" style="font-weight:bold; font-size:1.1rem; font-family:'Georgia', serif;">Aug 1, 2025</div>
-
-				<div class="stats-row">
-					<div class="stat">Budget: <span id="stat-budget">$0</span></div>
-					<div class="stat">Prestige: <span id="stat-prestige">0</span></div>
-				</div>
-
-				<div class="time-controls">
-					<div class="btn-group">
-						<button class="btn-time active" id="btn-speed-0" onclick="Game.setSpeed(0)">||</button>
-						<button class="btn-time" id="btn-speed-1" onclick="Game.setSpeed(1)">></button>
-						<button class="btn-time" id="btn-speed-2" onclick="Game.setSpeed(2)">>></button>
-						<button class="btn-time" id="btn-speed-3" onclick="Game.setSpeed(3)">>>></button>
-					</div>
-				</div>
-			</div>
-
-			<div id="viewport">
-				<div id="screen-office" class="screen">
-    <div style="display:flex; height:100%; border:1px solid #ccc; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-        
-        <div id="email-list-pane" style="width:350px; min-width:300px; border-right:1px solid #ddd; display:flex; flex-direction:column; background:white;">
-            <div id="email-list" style="flex:1; overflow-y:auto;"></div> 
-        </div>
-
-        <div id="email-reading-pane" style="flex:1; background:#f8f9fa; position:relative; overflow-y:auto;">
-            
-            <div id="email-empty-view" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#999; text-align:center;">
-                <div style="font-size:3rem; margin-bottom:10px;">✉️</div>
-                Select an email to read
+            <div class="form-group">
+                <label>Department Name</label>
+                <input type="text" id="setup-name" value="Dept. of Chemistry">
             </div>
 
-            <div id="email-reading-view" class="hidden" style="padding:30px;">
-                <div id="view-subject" style="font-size:1.4rem; font-family:'Georgia', serif; font-weight:bold; color:#2c3e50; margin-bottom:5px;"></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:15px;">
-                    <div id="view-from" style="font-weight:bold; color:#555;"></div>
-                    <div id="view-date" style="color:#888; font-size:0.9rem;"></div>
+            <div class="form-group">
+                <label>Your Last Name</label>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-weight:bold; font-family:'Georgia', serif; font-size:1.1rem; color:#2c3e50;">Dr.</span>
+                    <input type="text" id="setup-player-name" value="Smith" style="flex:1;">
                 </div>
-                <div id="view-body" style="font-size:1rem; line-height:1.6; color:#333;"></div>
-                
-                <div id="email-actions" style="margin-top:30px;"></div>
             </div>
 
+            <div class="form-group">
+                <label>Institution Type</label>
+                <select id="setup-type" onchange="Game.updateSetupFlavor()">
+                    <option value="state">State University</option>
+                    <option value="ivy">Private Ivy (Not Implemented)</option>
+                    <option value="community">Community College (Not Implemented)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Discipline</label>
+                <select id="setup-discipline" onchange="Game.updateSetupFlavor()">
+                    <option value="chemistry">Chemistry</option>
+                </select>
+            </div>
+
+            <div id="setup-desc" style="margin-bottom:20px; font-style:italic; color:#666; min-height:40px;"></div>
+
+            <div class="form-actions">
+                <button class="btn-main" style="width:100%" onclick="Game.initGameFromSetup()">Start Academic Year</button>
+                <button class="btn-small" onclick="document.getElementById('setup-screen').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden');">Back</button>
+            </div>
         </div>
     </div>
-</div>
-				<div id="screen-calendar" class="screen hidden"></div>
-				<div id="screen-faculty" class="screen hidden"></div>
-				<div id="screen-finance" class="screen hidden"></div>
-				<div id="screen-students" class="screen hidden"></div>
-				<div id="screen-records" class="screen hidden"></div>
-				<div id="screen-admissions" class="screen hidden">
-    <div class="screen-header" style="margin-bottom:15px; border-bottom:2px solid #2c3e50; padding-bottom:10px;">
-        <div style="display:flex; flex-direction:column; gap:10px;">
-            <h2 style="margin:0;">Graduate Admissions</h2>
-            
-            <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                <select id="adm-sort" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; font-weight:bold; background:#e8f8f5;">
-                    <option value="default">Sort: Default</option>
-                    <option value="gpa">Sort: GPA (High-Low)</option>
-                    <option value="rec">Sort: Rec Letter (High-Low)</option>
-                    <option value="exp">Sort: Experience (High-Low)</option>
-                    <option value="sop">Sort: SOP Strength (High-Low)</option>
-                </select>
 
-                <select id="adm-filter-status" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px;">
-                    <option value="All">Status: All</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Offer Extended">Offers Out</option>
-                    <option value="Accepted">Accepted</option>
-                    <option value="Rejected">Rejected</option>
-                </select>
-                
-                <select id="adm-filter-interest" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px;">
-                    <option value="All">Field: All</option>
-                    <option value="Organic">Organic</option>
-                    <option value="Inorganic">Inorganic</option>
-                    <option value="Physical">Physical</option>
-                    <option value="Analytical">Analytical</option>
-                    <option value="Materials">Materials</option>
-                </select>
-            </div>
-
-            <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                <select id="adm-filter-gpa" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
-                    <option value="All">GPA: Any</option>
-                    <option value="3.8+">GPA > 3.8 (Elite)</option>
-                    <option value="3.5+">GPA > 3.5 (Strong)</option>
-                    <option value="3.0-3.5">GPA 3.0 - 3.5</option>
-                    <option value="<3.0">GPA < 3.0 (Risk)</option>
-                </select>
-
-                <select id="adm-filter-sop" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
-                    <option value="All">SOP: Any</option>
-                    <option value="80+">SOP > 80 (Great)</option>
-                    <option value="50-80">SOP 50 - 80 (Avg)</option>
-                    <option value="<50">SOP < 50 (Weak)</option>
-                </select>
-
-                <select id="adm-filter-rec" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
-                    <option value="All">Recs: Any</option>
-                    <option value="9+">Recs 9-10 (Glowing)</option>
-                    <option value="7+">Recs 7+ (Good)</option>
-                    <option value="<7">Recs < 7 (Concern)</option>
-                </select>
-            </div>
-        </div>
-
-        <div id="admissions-dashboard" style="margin-top:15px; background:#f8f9fa; padding:10px; border-radius:5px; border:1px solid #ddd; display:flex; align-items:center; gap:15px;">
-            </div>
-    </div>
-
-    <div id="admissions-pool-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:15px; padding-bottom:50px;">
-        </div>
-</div>
-				<div id="screen-search" class="screen hidden" id="screen-faculty-search"></div>
-			</div>
-		</div>
-	</div>
-
-	<script src="js/data.js"></script>
-	<script src="js/state.js"></script>
-	<script src="js/ui.js"></script>
-	<script src="js/main.js"></script>
-	<div id="modal-overlay" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; display:flex; justify-content:center; align-items:center;">
-    <div id="modal-cv" style="background:#fdfbf7; width:500px; max-width:90%; padding:30px; border-radius:2px; box-shadow:0 10px 25px rgba(0,0,0,0.3); position:relative; font-family:'Georgia', serif; color:#333;">
-        <button onclick="UI.closeModal()" style="position:absolute; top:10px; right:10px; border:none; background:none; font-size:1.5rem; cursor:pointer; color:#888;">&times;</button>
+    <div id="game-interface" class="hidden">
         
-        <div id="cv-content"></div>
+        <div id="sidebar">
+            <div class="dept-brand">Dept. of Chemistry</div>
+
+            <div id="nav-office" class="nav-item active" onclick="Game.navigate('office')">Dean's Office</div>
+            <div id="nav-calendar" class="nav-item" onclick="Game.navigate('calendar')">Calendar</div>
+            <div id="nav-faculty" class="nav-item" onclick="Game.navigate('faculty')">Faculty Roster</div>
+            <div id="nav-finance" class="nav-item" onclick="Game.navigate('finance')">Finance</div>
+            <div id="nav-students" class="nav-item" onclick="Game.navigate('students')">Grad Students</div>
+            <div id="nav-records" class="nav-item" onclick="Game.navigate('records')">Records</div>
+            <div id="nav-admissions" class="nav-item" onclick="Game.navigate('admissions')">Admissions</div>
+            <div id="nav-search" class="nav-item" onclick="Game.navigate('search')">Faculty Search</div>
+
+            <div class="sidebar-footer">
+                <div style="font-size:0.8rem; opacity:0.6; margin-bottom:10px;">Season 1</div>
+                <button class="btn-small" onclick="State.saveGame()">Save Game</button>
+            </div>
+        </div>
+
+        <div id="content-area">
+            
+            <div id="top-bar">
+                <div id="date-display" style="font-weight:bold; font-size:1.1rem; font-family:'Georgia', serif;">Aug 1, 2025</div>
+
+                <div class="stats-row">
+                    <div class="stat">Budget: <span id="stat-budget">$0</span></div>
+                    <div class="stat">Prestige: <span id="stat-prestige">0</span></div>
+                </div>
+
+                <div class="time-controls">
+                    <div class="btn-group">
+                        <button class="btn-time active" id="btn-speed-0" onclick="Game.setSpeed(0)">||</button>
+                        <button class="btn-time" id="btn-speed-1" onclick="Game.setSpeed(1)">></button>
+                        <button class="btn-time" id="btn-speed-2" onclick="Game.setSpeed(2)">>></button>
+                        <button class="btn-time" id="btn-speed-3" onclick="Game.setSpeed(3)">>>></button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="viewport">
+                
+                <div id="screen-office" class="screen">
+                    <div style="display:flex; height:100%; border:1px solid #ccc; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+                        <div id="email-list-pane" style="width:350px; min-width:300px; border-right:1px solid #ddd; display:flex; flex-direction:column; background:white;">
+                            <div id="email-list" style="flex:1; overflow-y:auto;"></div> 
+                        </div>
+                        <div id="email-reading-pane" style="flex:1; background:#f8f9fa; position:relative; overflow-y:auto;">
+                            <div id="email-empty-view" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#999; text-align:center;">
+                                <div style="font-size:3rem; margin-bottom:10px;">✉️</div>
+                                Select an email to read
+                            </div>
+                            <div id="email-reading-view" class="hidden" style="padding:30px;">
+                                <div id="view-subject" style="font-size:1.4rem; font-family:'Georgia', serif; font-weight:bold; color:#2c3e50; margin-bottom:5px;"></div>
+                                <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-bottom:1px solid #ddd; padding-bottom:15px;">
+                                    <div id="view-from" style="font-weight:bold; color:#555;"></div>
+                                    <div id="view-date" style="color:#888; font-size:0.9rem;"></div>
+                                </div>
+                                <div id="view-body" style="font-size:1rem; line-height:1.6; color:#333;"></div>
+                                <div id="email-actions" style="margin-top:30px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="screen-calendar" class="screen hidden"></div>
+                <div id="screen-faculty" class="screen hidden"></div>
+                <div id="screen-finance" class="screen hidden"></div>
+                <div id="screen-students" class="screen hidden"></div>
+                <div id="screen-records" class="screen hidden"></div>
+
+                <div id="screen-admissions" class="screen hidden">
+                    <div class="screen-header" style="margin-bottom:15px; border-bottom:2px solid #2c3e50; padding-bottom:10px;">
+                        <div style="display:flex; flex-direction:column; gap:10px;">
+                            <h2 style="margin:0;">Graduate Admissions</h2>
+                            <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                                <select id="adm-sort" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; font-weight:bold; background:#e8f8f5;">
+                                    <option value="default">Sort: Default</option>
+                                    <option value="gpa">Sort: GPA (High-Low)</option>
+                                    <option value="rec">Sort: Rec Letter (High-Low)</option>
+                                    <option value="exp">Sort: Experience (High-Low)</option>
+                                    <option value="sop">Sort: SOP Strength (High-Low)</option>
+                                </select>
+                                <select id="adm-filter-status" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px;">
+                                    <option value="All">Status: All</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Offer Extended">Offers Out</option>
+                                    <option value="Accepted">Accepted</option>
+                                    <option value="Rejected">Rejected</option>
+                                </select>
+                                <select id="adm-filter-interest" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px;">
+                                    <option value="All">Field: All</option>
+                                    <option value="Organic">Organic</option>
+                                    <option value="Inorganic">Inorganic</option>
+                                    <option value="Physical">Physical</option>
+                                    <option value="Analytical">Analytical</option>
+                                    <option value="Materials">Materials</option>
+                                </select>
+                            </div>
+                            <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                                <select id="adm-filter-gpa" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
+                                    <option value="All">GPA: Any</option>
+                                    <option value="3.8+">GPA > 3.8 (Elite)</option>
+                                    <option value="3.5+">GPA > 3.5 (Strong)</option>
+                                    <option value="3.0-3.5">GPA 3.0 - 3.5</option>
+                                    <option value="<3.0">GPA < 3.0 (Risk)</option>
+                                </select>
+                                <select id="adm-filter-sop" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
+                                    <option value="All">SOP: Any</option>
+                                    <option value="80+">SOP > 80 (Great)</option>
+                                    <option value="50-80">SOP 50 - 80 (Avg)</option>
+                                    <option value="<50">SOP < 50 (Weak)</option>
+                                </select>
+                                <select id="adm-filter-rec" onchange="if(typeof UI !== 'undefined') UI.renderAdmissions(State.data)" style="padding:5px; border:1px solid #aaa;">
+                                    <option value="All">Recs: Any</option>
+                                    <option value="9+">Recs 9-10 (Glowing)</option>
+                                    <option value="7+">Recs 7+ (Good)</option>
+                                    <option value="<7">Recs < 7 (Concern)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="admissions-dashboard" style="margin-top:15px; background:#f8f9fa; padding:10px; border-radius:5px; border:1px solid #ddd; display:flex; align-items:center; gap:15px;">
+                            </div>
+                    </div> <div id="admissions-pool-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:15px; padding-bottom:50px;">
+                    </div>
+                </div> <div id="screen-search" class="screen hidden"></div>
+
+            </div> </div> </div> <script src="js/data.js"></script>
+    <script src="js/events.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/main.js"></script>
+
+    <div id="modal-overlay" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; display:flex; justify-content:center; align-items:center;">
+        <div id="modal-cv" style="background:#fdfbf7; width:500px; max-width:90%; padding:30px; border-radius:2px; box-shadow:0 10px 25px rgba(0,0,0,0.3); position:relative; font-family:'Georgia', serif; color:#333;">
+            <button onclick="UI.closeModal()" style="position:absolute; top:10px; right:10px; border:none; background:none; font-size:1.5rem; cursor:pointer; color:#888;">&times;</button>
+            <div id="cv-content"></div>
+        </div>
     </div>
-</div>
+
 </body>
 </html>

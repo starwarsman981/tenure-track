@@ -203,8 +203,10 @@ const UI = {
         document.getElementById('confirm-recruit').onclick = () => {
             const target = document.getElementById('recruit-target').value;
             const strat = document.getElementById('recruit-budget').value;
+            
+            // This function now generates its own "Reply" email from the Chair
             State.setRecruitmentStrategy(target, strat);
-            State.addEmail("Admin", "Strategy Confirmed", `We have set the target to ${target} students and authorized the marketing budget.`);
+            
             overlay.remove();
         };
     },
@@ -996,11 +998,20 @@ renderRecords: function(data) {
     },
 
     /* js/ui.js */
-
+    // Helper to categorize emails for the new filter system
+    // PASTE THIS RIGHT BEFORE 'renderInbox:'
+    getEmailType: function(e) {
+        if (e.category === 'urgent' || e.subject.includes('Action:')) return 'urgent';
+        if (e.category === 'paper' || e.subject.includes('Accepted')) return 'paper';
+        if (e.sender.includes('Search') || e.subject.includes('Candidate') || e.subject.includes('Job Ad')) return 'search';
+        if (e.sender.includes('Admissions') || e.sender.includes('Events') || e.subject.includes('Acceptance') || e.subject.includes('Declined') || e.subject.includes('Visit')) return 'admissions';
+        if (e.sender === 'Bursar' || e.sender === 'OSP' || e.sender === 'Provost' || e.subject.includes('Grant') || e.subject.includes('Award')) return 'finance';
+        return 'notification'; 
+    },
     renderInbox: function(emails) { 
         const container = this.elements.screens.office; 
         
-        // 1. Setup the Layout (Only runs once)
+        // 1. SETUP LAYOUT (Run once)
         if (!container.querySelector('.outlook-layout')) { 
             container.innerHTML = `
                 <div class="outlook-layout">
@@ -1014,14 +1025,7 @@ renderRecords: function(data) {
                                 oninput="Game.setEmailSearch(this.value)" 
                                 style="width:100%; padding:8px; border:1px solid #ccc; border-radius:3px; font-size:0.85rem; box-sizing:border-box;">
                             
-                            <select onchange="Game.setEmailFilter(this.value)" style="width:100%; padding:5px; border:1px solid #ccc; border-radius:3px; font-size:0.85rem;">
-                                <option value="all">Show All Categories</option>
-                                <option value="urgent">⚠️ Dilemmas & Urgent</option>
-                                <option value="paper">📄 Publications</option>
-                                <option value="search">🔎 Faculty Search</option>
-                                <option value="admissions">🎓 Admissions</option>
-                                <option value="finance">💰 Finance & Grants</option>
-                            </select>
+                            <div id="email-filter-badges" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:5px;"></div>
                         </div>
                         <div class="email-list-scroll" id="email-list-container"></div>
                     </div>
@@ -1039,49 +1043,79 @@ renderRecords: function(data) {
                 </div>`; 
         } 
         
+        // 2. RENDER FILTERS (The Badges)
+        const filterContainer = document.getElementById('email-filter-badges');
+        if(filterContainer) {
+            const filters = [
+                { key: 'urgent', label: '⚠️ Urgent', color: '#c0392b' },
+                { key: 'paper', label: '📄 Papers', color: '#2980b9' },
+                { key: 'search', label: '🔎 Faculty Search', color: '#8e44ad' },
+                { key: 'admissions', label: '🎓 Admissions', color: '#f1c40f' }, // Yellow needs dark text usually, handling below
+                { key: 'finance', label: '💰 Money', color: '#27ae60' },
+                { key: 'notification', label: '🔔 Misc', color: '#7f8c8d' }
+            ];
+
+            let html = "";
+            filters.forEach(f => {
+                const isActive = Game.emailFilters[f.key];
+                // Visual Styles
+                const bg = isActive ? f.color : '#ecf0f1';
+                const fg = isActive ? '#fff' : '#95a5a6';
+                const border = isActive ? f.color : '#bdc3c7';
+                
+                // Specific tweak for yellow (Admissions) to be readable
+                const textCol = (isActive && f.key === 'admissions') ? '#333' : fg;
+
+                html += `<div onclick="Game.toggleEmailFilter('${f.key}')" 
+                          style="padding:3px 8px; border-radius:12px; font-size:0.75rem; cursor:pointer; user-select:none; border:1px solid ${border}; background:${bg}; color:${textCol}; font-weight:bold;">
+                          ${f.label}
+                         </div>`;
+            });
+            filterContainer.innerHTML = html;
+        }
+
         const listContainer = document.getElementById('email-list-container'); 
         listContainer.innerHTML = ''; 
         
-        // 2. Filter Logic (Combines Category + Search)
-        const catFilter = Game.emailFilter || 'all';
+        // 3. FILTER LOGIC
         const searchFilter = Game.emailSearchQuery || '';
         
         const filteredEmails = emails.filter(e => {
-            // A. Check Category
-            let matchesCategory = false;
-            if (catFilter === 'all') matchesCategory = true;
-            else if (catFilter === 'urgent') matchesCategory = e.category === 'urgent' || e.subject.includes('Action:');
-            else if (catFilter === 'paper') matchesCategory = e.category === 'paper' || e.subject.includes('Accepted');
-            else if (catFilter === 'search') matchesCategory = e.sender.includes('Search') || e.subject.includes('Candidate') || e.subject.includes('Job Ad');
-            else if (catFilter === 'admissions') matchesCategory = e.sender.includes('Admissions') || e.sender.includes('Events') || e.subject.includes('Acceptance') || e.subject.includes('Declined') || e.subject.includes('Visit');
-            else if (catFilter === 'finance') matchesCategory = e.sender === 'Bursar' || e.sender === 'OSP' || e.sender === 'Provost' || e.subject.includes('Grant') || e.subject.includes('Award');
+            // A. Check Category using Helper
+            const type = this.getEmailType(e);
+            if (!Game.emailFilters[type]) return false; // Skip if toggle is OFF
             
-            // B. Check Search Term (Subject or Sender)
+            // B. Check Search
             let matchesSearch = true;
             if (searchFilter !== '') {
                 matchesSearch = e.subject.toLowerCase().includes(searchFilter) || 
                                 e.sender.toLowerCase().includes(searchFilter);
             }
 
-            return matchesCategory && matchesSearch;
+            return matchesSearch;
         });
 
-        // 3. Render List
+        // 4. RENDER LIST
         let unread = 0; 
         emails.forEach(e => { if(!e.read) unread++; }); 
 
         if (filteredEmails.length === 0) {
-            listContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#999; font-style:italic;">No matching emails.</div>`;
+            listContainer.innerHTML = `<div style="padding:20px; text-align:center; color:#999; font-style:italic;">No emails match filters.</div>`;
         } else {
             filteredEmails.forEach(email => { 
                 const item = document.createElement('div'); 
                 item.className = `email-item ${email.read ? 'read' : 'unread'}`; 
                 
-                // Color strips
-                if(email.category === 'urgent') item.style.borderLeftColor = "#c0392b"; 
-                else if(email.category === 'paper') item.style.borderLeftColor = "#2980b9"; 
-                else if(email.sender.includes('Search')) item.style.borderLeftColor = "#8e44ad"; 
-                else if(email.sender === 'OSP') item.style.borderLeftColor = "#27ae60"; 
+                // Use helper to color code the left border
+                const type = this.getEmailType(email);
+                let borderColor = "transparent";
+                if(type === 'urgent') borderColor = "#c0392b"; 
+                else if(type === 'paper') borderColor = "#2980b9"; 
+                else if(type === 'search') borderColor = "#8e44ad"; 
+                else if(type === 'finance') borderColor = "#27ae60"; 
+                else if(type === 'admissions') borderColor = "#f1c40f";
+
+                item.style.borderLeftColor = borderColor;
 
                 item.onclick = () => UI.openEmail(email.id); 
                 item.innerHTML = `
@@ -1095,16 +1129,11 @@ renderRecords: function(data) {
         const countSpan = document.getElementById('unread-count');
         if(countSpan) countSpan.innerText = unread > 0 ? `${unread} Unread` : ''; 
         
-        // Restore dropdown value if UI re-renders
-        const dropdown = container.querySelector('select');
-        if(dropdown) dropdown.value = catFilter;
-        
-        // Restore search focus/value if UI re-renders (Critical for typing!)
+        // Restore focus to search bar if typing
         const input = container.querySelector('input');
-        if(input) {
-            input.value = Game.emailSearchQuery || ''; // Use state, not argument
-            // Only focus if we are actively typing (heuristic: string length > 0)
-            if(Game.emailSearchQuery.length > 0) input.focus();
+        if(input && Game.emailSearchQuery.length > 0) {
+            input.value = Game.emailSearchQuery;
+            input.focus();
         }
     },
 

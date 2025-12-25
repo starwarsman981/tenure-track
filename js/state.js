@@ -38,10 +38,70 @@ const State = {
     /* js/state.js */
 
     /* js/state.js */
+    // 1. Helper to Find or Assign a Committee Chair (Lazy Load)
+    getCommitteeChair: function(type) {
+        // Type = 'search' (Full Prof only) or 'admissions' (Assoc/Full)
+        
+        let chair = this.data.faculty.find(f => (type === 'search' ? f.isSearchChair : f.isAdmissionsChair));
+        
+        if (!chair) {
+            // No chair assigned yet? Assign one now.
+            const candidates = this.data.faculty.filter(f => {
+                if (type === 'search') return f.rank === 'Full';
+                return f.rank === 'Full' || f.rank === 'Associate';
+            });
+            
+            // If no Full profs exist for search, fallback to anyone (shouldn't happen in normal gen)
+            const pool = candidates.length > 0 ? candidates : this.data.faculty;
+            
+            // Prefer someone who isn't already a chair of the other thing
+            chair = pool.find(f => !f.isSearchChair && !f.isAdmissionsChair) || pool[0];
+            
+            if (chair) {
+                if (type === 'search') chair.isSearchChair = true;
+                else chair.isAdmissionsChair = true;
+            }
+        }
+        return chair || { name: "Dr. Interim", rank: "Professor" }; // Fallback safety
+    },
 
-    initNewGame: function(name, typeKey, discKey) {
+    // 2. Centralized Signature Generator
+    getProfSignature: function(prof) {
+        let roleTitle = "Professor of Chemistry"; 
+        if (prof.rank === "Assistant") roleTitle = "Assistant Professor of Chemistry";
+        else if (prof.rank === "Associate") roleTitle = "Associate Professor of Chemistry";
+        else if (prof.rank === "Adjunct") roleTitle = "Adjunct Professor of Chemistry";
+
+        const lastName = prof.name.split(' ').pop();
+        const labName = `${lastName} Lab`;
+
+        let extraLine = "";
+        // --- NEW: Add Committee Roles to Signature ---
+        if (prof.isSearchChair) extraLine += "Chair, Faculty Search Committee<br>";
+        if (prof.isAdmissionsChair) extraLine += "Chair, Graduate Admissions<br>";
+        
+        // Add Research Traits if not already crowded
+        if (extraLine === "") {
+            if (prof.hIndex > 45) extraLine = "Distinguished Fellow, ACS<br>";
+            else if (prof.grants.length > 3) extraLine = "Director, Center for Chemical Innovation<br>";
+        }
+
+        return `
+            <div style="margin-top:20px; padding-top:10px; border-top:1px solid #ccc; color:#555; font-family:'Georgia', serif; font-size:0.9rem;">
+                <strong>${prof.name}</strong><br>
+                ${roleTitle}<br>
+                Principal Investigator, ${labName}<br>
+                ${extraLine}
+                ${prof.field} Division
+            </div>
+        `;
+    },
+    // CHANGED: Added playerName argument
+    initNewGame: function(name, typeKey, discKey, playerName) {
         this.data.year = 2025; this.data.month = 7; this.data.day = 1;
         this.data.deptName = name; this.data.type = typeKey; this.data.discipline = discKey;
+        this.data.playerName = playerName; // Store it
+        
         this.data.students = []; this.data.admissions.active = false; this.data.admissions.pool = [];
         this.data.publications = [];
         this.data.policy = { overheadRate: 0.50, salaryMod: 1.0, stipendMod: 1.0 };
@@ -61,11 +121,7 @@ const State = {
         
         this.data.faculty = [];
         const targetCount = Math.floor(Math.random() * 5) + 8; 
-        
-        // 1. Min 1, Max 2 Assistants
         const assistantCount = 1 + (Math.random() < 0.5 ? 1 : 0); 
-        
-        // 2. Build Ranks
         let ranks = [];
         for(let i=0; i<assistantCount; i++) ranks.push("Assistant");
         while(ranks.length < targetCount) {
@@ -74,44 +130,24 @@ const State = {
             else if(r < 0.90) ranks.push("Full");
             else ranks.push("Adjunct");
         }
-        
-        // Shuffle
         ranks.sort(() => Math.random() - 0.5);
-
-        // Ensure Chair is Senior
         if(ranks[0] === "Assistant" || ranks[0] === "Adjunct") {
             const seniorIdx = ranks.findIndex(r => r === "Full" || r === "Associate");
-            if(seniorIdx !== -1) {
-                [ranks[0], ranks[seniorIdx]] = [ranks[seniorIdx], ranks[0]];
-            }
+            if(seniorIdx !== -1) { [ranks[0], ranks[seniorIdx]] = [ranks[seniorIdx], ranks[0]]; }
         }
 
-        // --- NEW: TENURE STAGGER LOGIC ---
-        // We pick distinct years for the assistants found in the 'ranks' array.
-        // Available years: 0, 1, 2, 3, 4
         let availableYears = [0, 1, 2, 3, 4];
-        // Shuffle available years
         availableYears.sort(() => Math.random() - 0.5);
-        
         let assistantIndex = 0;
-        // --------------------------------
-
         const fields = ["Organic", "Inorganic", "Physical", "Analytical", "Materials"];
         
         for(let i=0; i<targetCount; i++) {
             let r = ranks[i];
             let f = fields[Math.floor(Math.random()*fields.length)];
-            
-            // Pass Staggered Year if Assistant
             let forcedYear = null;
-            if(r === "Assistant") {
-                forcedYear = availableYears[assistantIndex];
-                assistantIndex++;
-            }
-
+            if(r === "Assistant") { forcedYear = availableYears[assistantIndex]; assistantIndex++; }
             const prof = FacultyGenerator.generate(r, f, forcedYear);
             const studentCount = StudentGenerator.getCountForRank(r);
-            
             for(let s=0; s<studentCount; s++) {
                 const newStudent = StudentGenerator.generate(prof.id, prof.name);
                 this.data.students.push(newStudent);
@@ -122,100 +158,130 @@ const State = {
         
         this.data.faculty.forEach(f => this.recalcFacultyFinances(f));
         
-        this.addEmail("Outgoing Chair", "Handover Notes (Tutorial)", 
-            `Welcome to the big chair! Here is what you need to know to survive:<br><br>
-            1. <strong>The Budget:</strong> We burn money weekly. If we go broke, the Dean fires you. Keep an eye on the <span style='color:#c0392b'>Finance Tab</span>.<br>
-            2. <strong>Research:</strong> Faculty need Grants. If they run out of money, it's a downward spiral from there. <br>
-            3. <strong>Grad Students:</strong> They do the real work. They'll fight for prized RA positions, and if professors don't have the cash, you'll be funding them on a TA instead. Every year, you'll bring in a new admissions class and graduate the senior candidates. <br><br>
-            Good luck. You're going to need it.`);
+        // --- 1. TUTORIAL EMAIL ---
+        this.addEmail("Prof. Vance", "Subject: Handover Notes / Good Luck", 
+            `<p>Dear Dr. ${playerName},</p>
+            <p>I left the office keys under the mat. The department is yours now. Before I drive off into retirement, here is the unvarnished truth about keeping this ship afloat:</p>
             
-        this.addEmail("Provost", "Fiscal Year Start", `Welcome. Expenses are deducted weekly.
-            Tuition revenue arrives twice a year: August 1 and January 15. Additionally, we recieve overhead from grants as they are awarded, and state funding is disbursed weekly.<br>
-            In order to keep steady revenues, adjust overhead rates and salary/stipend policies in the <span style='color:#c0392b'>Finance Tab</span>.`);
+            <div style="background:#f9f9f9; padding:15px; border-left:4px solid #c0392b; margin:10px 0;">
+                <strong>1. The Money Pit (Finance Tab)</strong><br>
+                We burn cash every week. If the balance hits $0, the Dean fires you.
+                <ul style="margin-top:5px; padding-left:20px; font-size:0.9rem;">
+                    <li><strong>Tuition</strong> drops twice a year (Aug 1 & Jan 15). Hoard it.</li>
+                    <li><strong>Grants</strong> are life. If faculty run dry, <em>you</em> have to pay their students' salaries (TA lines).</li>
+                </ul>
+            </div>
+
+            <div style="background:#f9f9f9; padding:15px; border-left:4px solid #2980b9; margin:10px 0;">
+                <strong>2. The Cats (Faculty)</strong><br>
+                They have egos. They need money. If they are happy, they publish papers. If they publish, we gain <strong>Prestige</strong>.
+                <br><em>Tip: Click their names in the Roster to see their specific burn rates.</em>
+            </div>
+
+            <p>Try not to burn the building down.</p>
+            <br>
+            <div style="color:#555; font-family:'Georgia', serif; border-top:1px solid #ccc; padding-top:10px;">
+                <strong>Alistair Vance, PhD</strong><br>
+                <span style="font-size:0.9rem; color:#777;">Emeritus Professor of Chemistry<br>
+                Former Department Chair (Survivor 2015-2025)</span>
+            </div>`, "urgent");
+            
+        // --- 2. MECHANICS EMAIL ---
+        this.addEmail("Office of the Provost", "FY26 Fiscal Guidelines & Overhead Policy", 
+            `<div style="font-family:'Georgia', serif; border-bottom:1px solid #ccc; margin-bottom:10px; padding-bottom:5px;">
+                <strong>MEMORANDUM</strong><br>
+                <span style="font-size:0.8rem; color:#666;">TO: Dr. ${playerName}, Dept. Chair | FROM: University Finance Office</span>
+            </div>
+            <p>Welcome to the 2025-2026 Fiscal Year. As Chair, you have autonomous control over department policies, provided you remain solvent.</p>
+            
+            <p><strong><u>Revenue Streams</u></strong></p>
+            <ul style="font-size:0.9rem;">
+                <li><strong>State Stipend:</strong> Disbursed weekly. Covers basic facility costs only.</li>
+                <li><strong>Tuition Revenue:</strong> Lump sum transfers on <strong>Aug 1</strong> and <strong>Jan 15</strong>.</li>
+                <li><strong>Indirect Costs (Overhead):</strong> You receive a cut of every research grant won by your faculty.</li>
+            </ul>
+
+            <p><strong><u>Action Required</u></strong><br>
+            Please review the <span style="color:#c0392b; font-weight:bold;">Finance Tab</span> immediately. You must configure:</p>
+            <ol style="font-size:0.9rem;">
+                <li><strong>Overhead Rate:</strong> How much grant money the Dept takes vs the Lab keeps.</li>
+                <li><strong>Salary/Stipends:</strong> Higher pay improves morale and recruitment, but drains the budget faster.</li>
+            </ol>
+            
+            <br>
+            <div style="color:#555; font-family:'Georgia', serif; border-top:1px solid #ccc; padding-top:10px;">
+                <strong>Eleanor Sterling, MBA, CPA</strong><br>
+                <span style="font-size:0.9rem; color:#777;">Provost & Executive Vice President<br>
+                Office of Budgetary Compliance</span>
+            </div>`, "urgent");
     },
 
   advanceDay: function() {
     // --- NEW: PROCESS TIMED EVENTS ---
         if(this.data.timedEvents && this.data.timedEvents.length > 0) {
-            // Loop backwards so we can splice safely
             for (let i = this.data.timedEvents.length - 1; i >= 0; i--) {
                 const ev = this.data.timedEvents[i];
-                
-                // Check if date has arrived (or passed)
-                const isTime = (this.data.year > ev.year) ||
-                               (this.data.year === ev.year && this.data.month > ev.month) ||
-                               (this.data.year === ev.year && this.data.month === ev.month && this.data.day >= ev.day);
+                const isTime = (this.data.year > ev.year) || (this.data.year === ev.year && this.data.month > ev.month) || (this.data.year === ev.year && this.data.month === ev.month && this.data.day >= ev.day);
 
                 if (isTime) {
                     if (ev.type === 'late_apps') {
-                        // 1. Find the Prof
                         const prof = this.data.faculty.find(f => f.id === ev.profId);
-                        
-                        // 2. Generate Students (Only if prof still exists)
                         if (prof) {
                             const newApps = ApplicantGenerator.generatePool([prof], 1.1, 0.2); 
-                            
                             newApps.forEach(app => {
                                 app.facultyNote = "Late Applicant (Heard about new hire)";
                                 app.interest = ev.profField;
                                 app.matches = [{ name: ev.profName, reason: "New Lab Opening" }];
                             });
-
                             this.data.admissions.pool.push(...newApps);
+                            
+                            // Get Chair for Email
+                            const admChair = this.getCommitteeChair('admissions');
+                            const playerName = this.data.playerName || "Chair";
+                            
+                            const body = `Dear Dr. ${playerName},<br><br>Word has spread about ${ev.profName}'s hiring. We just received <strong>${newApps.length} late applications</strong> specifically targeting their lab.<br><br>You should review them immediately in the Admissions tab.<br><br>Best,<br>${this.getProfSignature(admChair)}`;
 
-                            // 3. SEND THE EMAIL (The "As Well" part)
-                            this.addEmail("Grad Admissions", "Late Applications Arrived", 
-                                `Word has spread about ${ev.profName}'s hiring.<br><br>
-                                We just received <strong>${newApps.length} late applications</strong> specifically targeting their lab.<br>
-                                You should review them immediately in the Admissions tab.`, "urgent");
+                            this.addEmail(admChair.name, "Late Applications Arrived", body, "urgent");
                         }
                     }
-                    // Remove executed event
                     this.data.timedEvents.splice(i, 1);
                 }
             }
         }
-        // ---------------------------------
+        
         // 1. INCREMENT TIME
         this.data.day++;
-        
-        // 2. CALENDAR MATH
         if (this.data.day > 30) {
             this.data.day = 1; 
             this.data.month++;
-            if(this.data.month > 11) { 
-                this.data.month = 0; 
-                this.data.year++; 
-            }
+            if(this.data.month > 11) { this.data.month = 0; this.data.year++; }
         }
 
-        // 3. CHECK EVENTS
-        
-        // --- AUGUST 1st: NEW ACADEMIC YEAR ---
+        // 2. CHECK EVENTS
         if(this.data.month === 7 && this.data.day === 1) {
-            console.log("📅 Aug 1: Academic Year Rollover");
             this.processTuitionDrop(); 
             if(this.data.year > 2025) this.processAcademicYearRollover(); 
         }
-        
-        // Jan 15 Tuition
         if(this.data.month === 0 && this.data.day === 15) this.processTuitionDrop();
 
-        // Weekly/Daily Loops
         if(this.data.day % 7 === 0) {
            this.processWeeklyFinances();
            this.processGrantCycle();
            this.processMorale();
            this.updateCitations();
-           this.processAdmissionsQueue(); // <--- ADD THIS LINE
+           this.processAdmissionsQueue(); 
         }
         this.processResearchOutput();
+        if(this.data.day % 7 === 3) this.processRandomEvents();
 
-        // --- SPECIFIC DATES ---
+        // --- SCHEDULED EMAILS WITH REAL CHAIRS ---
         
         // AUG 15: ADMISSIONS RECRUITMENT STRATEGY
         if(this.data.month === 7 && this.data.day >= 15 && !this.data.admissions.setupComplete && !this.data.admissions.strategyRequested) {
             this.data.admissions.strategyRequested = true;
+            
+            const admChair = this.getCommitteeChair('admissions');
+            const playerName = this.data.playerName || "Chair";
             
             const activeLabs = this.data.faculty.filter(f => f.rank !== 'Adjunct').length;
             const baseEstimate = activeLabs * 1.3; 
@@ -224,31 +290,31 @@ const State = {
             const low = Math.max(1, estimatedCapacity - 2);
             const high = estimatedCapacity + 2;
 
-            this.addEmail("Grad Admissions Cmte", "ACTION REQUIRED: Set Cohort Size", 
-                `We have analyzed the department's lab capacity. We recommend between $${low} and $${high} students. Although, this is up to your discretion provided you can find the funds.<br><br>
-                <strong>Active Research Labs:</strong> ${activeLabs}<br>
-                <strong>Recommended Cohort:</strong> ${low} - ${high} students<br><br>
-                <button class="btn-main" onclick="UI.showRecruitmentSetupModal()">Configure Recruitment</button>`, "urgent");
-            
-            Game.setSpeed(0); // Force Pause
+            const body = `Dear Dr. ${playerName},<br><br>
+            As we approach the new cycle, the committee has analyzed the department's lab capacity. We recommend targeting between <strong>${low} and ${high} students</strong>.<br><br>
+            Please authorize the recruitment budget so we can begin advertising to prospective students.<br><br>
+            <button class="btn-main" onclick="UI.showRecruitmentSetupModal()">Configure Recruitment</button>
+            ${this.getProfSignature(admChair)}`;
+
+            this.addEmail(admChair.name, "ACTION REQUIRED: Set Cohort Size", body, "urgent");
+            Game.setSpeed(0); 
         }
         
-        // AUG 20: FACULTY SEARCH AUTHORIZATION
+        // AUG 20: FACULTY SEARCH AUTHORIZATION (Still from Dean)
         if(this.data.month === 7 && this.data.day === 20 && !this.data.facultySearch.active) {
-            this.addEmail("Dean", "Authorization for Faculty Search", 
-                `You have permission to open <strong>1 Tenure-Track Position</strong> this year.<br>
+            const playerName = this.data.playerName || "Chair";
+            this.addEmail("Dean's Office", "Authorization for Faculty Search", 
+                `Dear Dr. ${playerName},<br><br>You have permission to open <strong>1 Tenure-Track Position</strong> this year.<br>
                 Do you want to run a search?<br><br>
                 <button class='btn-main' onclick='State.startFacultySearch()'>Yes, Open Search</button>
-                <button class='btn-small' onclick='State.skipFacultySearch()'>No, save money</button>`);
-            Game.setSpeed(0); // Force Pause
+                <button class='btn-small' onclick='State.skipFacultySearch()'>No, save money</button>
+                <div style="margin-top:20px; padding-top:10px; border-top:1px solid #ccc; color:#555; font-family:'Georgia', serif;"><strong>Office of the Dean</strong><br>College of Arts & Sciences</div>`);
+            Game.setSpeed(0); 
         }
 
-        // --- FACULTY SEARCH TIMELINE ---
-
-        // OCT 1: APPLICATIONS ARRIVE (Start Shortlisting)
+        // OCT 1: APPLICATIONS ARRIVE
         if(this.data.month === 9 && this.data.day === 1 && this.data.facultySearch.active && this.data.facultySearch.phase === 'ads') {
             this.generateFacultyCandidates();
-            // generateFacultyCandidates sends the email, but let's force pause here too
             Game.setSpeed(0);
         }
 
@@ -256,11 +322,12 @@ const State = {
         if(this.data.month === 9 && this.data.day === 25 && this.data.facultySearch.phase === 'longlist') {
             const shortlistCount = this.data.facultySearch.pool.filter(c => c.status === 'Shortlist').length;
             if(shortlistCount < 3) {
-                this.addEmail("Search Chair", "URGENT: Shortlist Deadline", 
-                    `The interview phase begins in 5 days (Nov 1).<br>
-                    You currently have <strong>${shortlistCount} candidates</strong> shortlisted.<br><br>
-                    Please select at least 3 candidates to fly out.`, "urgent");
-                Game.setSpeed(0); // Force Pause
+                const searchChair = this.getCommitteeChair('search');
+                const playerName = this.data.playerName || "Chair";
+                const body = `Dear Dr. ${playerName},<br><br>The interview phase begins in 5 days (Nov 1). You currently have <strong>${shortlistCount} candidates</strong> shortlisted.<br><br>Please select at least 3 candidates to fly out.<br><br>Best,<br>${this.getProfSignature(searchChair)}`;
+                
+                this.addEmail(searchChair.name, "URGENT: Shortlist Deadline", body, "urgent");
+                Game.setSpeed(0); 
             }
         }
 
@@ -272,60 +339,61 @@ const State = {
                 if(c.status === 'Shortlist') shortlistCount++;
             });
 
+            const searchChair = this.getCommitteeChair('search');
+            const playerName = this.data.playerName || "Chair";
+
             if(shortlistCount === 0) {
-                this.addEmail("Dean", "Search Canceled", "You failed to select any candidates for interviews. The faculty line has been revoked.", "urgent");
+                this.addEmail("Dean's Office", "Search Canceled", "You failed to select any candidates for interviews. The faculty line has been revoked.", "urgent");
                 this.data.facultySearch.active = false;
                 this.data.facultySearch.phase = "failed";
             } else {
                 this.data.facultySearch.phase = "interview";
-                this.addEmail("Search Chair", "Interview Phase Started", 
-                    `The shortlist is locked with <strong>${shortlistCount} finalists</strong>.<br>
+                const body = `Dear Dr. ${playerName},<br><br>The shortlist is locked with <strong>${shortlistCount} finalists</strong>.<br><br>
                     <strong>Action Required:</strong> Conduct interviews and extend an offer.<br>
-                    <strong>Hard Deadline:</strong> February 15th.`, "search");
+                    <strong>Hard Deadline:</strong> February 15th.<br><br>
+                    ${this.getProfSignature(searchChair)}`;
+                this.addEmail(searchChair.name, "Interview Phase Started", body, "search");
             }
-            Game.setSpeed(0); // Force Pause
+            Game.setSpeed(0); 
         }
 
         // FEB 1: HIRE DEADLINE WARNING
         if(this.data.month === 1 && this.data.day === 1 && this.data.facultySearch.active && this.data.facultySearch.phase === 'interview') {
-            this.addEmail("Search Chair", "URGENT: Hiring Deadline Approaching", 
-                `We have 15 days left to secure a candidate for the Tenure-Track position.<br>
-                If no offer is accepted by <strong>Feb 15</strong>, the Dean will pull the funding.`, "urgent");
-            Game.setSpeed(0); // Force Pause
+            const searchChair = this.getCommitteeChair('search');
+            const playerName = this.data.playerName || "Chair";
+            const body = `Dear Dr. ${playerName},<br><br>We have 15 days left to secure a candidate for the Tenure-Track position. If no offer is accepted by <strong>Feb 15</strong>, the Dean will pull the funding.<br><br>${this.getProfSignature(searchChair)}`;
+            
+            this.addEmail(searchChair.name, "URGENT: Hiring Deadline Approaching", body, "urgent");
+            Game.setSpeed(0); 
         }
 
         // FEB 15: SEARCH EXPIRED
         if(this.data.month === 1 && this.data.day === 15 && this.data.facultySearch.active && this.data.facultySearch.phase === 'interview') {
-            this.addEmail("Dean", "Search Failed", 
-                `The deadline has passed. We cannot keep the faculty line open indefinitely.<br>
-                The search is officially closed without a hire. We can try again next year.`, "urgent");
+            this.addEmail("Dean's Office", "Search Failed", `The deadline has passed. The search is officially closed without a hire.`, "urgent");
             this.data.facultySearch.active = false;
             this.data.facultySearch.phase = "failed";
-            Game.setSpeed(0); // Force Pause
+            Game.setSpeed(0); 
         }
         
-        // --- ADMISSIONS SEASON ---
-        // --- ADMISSIONS SEASON ---
-// Starts Month 11 (Dec) through Month 2 (March)
-        const isSeason = (this.data.month === 11 || this.data.month === 0 || this.data.month === 1 || this.data.month === 2);
-
-// Only trigger specifically on Dec 1st (or if we somehow missed it and are in season)
+        // DEC 1: ADMISSIONS SEASON START
         if (this.data.month === 11 && this.data.day === 1 && !this.data.admissions.active) {
-        if(!this.data.admissions.setupComplete) this.setRecruitmentStrategy(7, "standard");
-        this.startAdmissionsSeason();
+            if(!this.data.admissions.setupComplete) this.setRecruitmentStrategy(7, "standard");
+            this.startAdmissionsSeason();
         }
 
-        // JAN 20: VISIT WEEKEND (Moved from March)
+        // JAN 20: VISIT WEEKEND
         if(this.data.month === 0 && this.data.day === 20) {
+            const admChair = this.getCommitteeChair('admissions');
+            const playerName = this.data.playerName || "Chair";
+            
             this.createInteractiveEmailEvent({
                 title: "Admissions: Visit Weekend",
-                desc: "It is time to host the recruitment weekend for our top applicants. This event can tip the scales for undecided students.",
+                desc: `Dear Dr. ${playerName},<br><br>It is time to host the recruitment weekend for our top applicants. This event can tip the scales for undecided students.<br><br>What is your directive?`,
                 choices: [
                     { text: "Host Full Event ($8,000)", cost: 8000, flavor: "Hotel, flights, and dinners. Significantly boosts yield.", effect: "visit_weekend" },
                     { text: "Skip Event", cost: 0, flavor: "Saves money, but we may lose top talent to rivals.", effect: "none" }
                 ]
-            }, "Admissions Cmte");
-            // Interactive events auto-pause, but just in case:
+            }, admChair.name);
             Game.setSpeed(0);
         }
 
@@ -333,7 +401,15 @@ const State = {
         if((this.data.month === 2 && this.data.day >= 15) || (this.data.month === 3 && this.data.day < 15)) this.processGradualDecisions();
         if(this.data.month === 3 && this.data.day === 15) this.processDecisionDay();
     },
+    processRandomEvents: function() {
+        if(Math.random() > 0.45) return; // 15% chance
+        if(typeof RANDOM_EVENTS === 'undefined') return;
+        
+        const ev = RANDOM_EVENTS[Math.floor(Math.random() * RANDOM_EVENTS.length)];
+        if(this.data.pendingEvent) return; // Don't overwrite existing events
 
+        this.createInteractiveEmailEvent(ev, ev.sender);
+    },
     createInteractiveEmailEvent: function(event, sender) {
         this.data.pendingEvent = event;
         let choicesHtml = "";
@@ -355,15 +431,67 @@ const State = {
     },
 
     resolveEventChoice: function(event, choice) {
-        this.data.budget -= choice.cost;
+        // A. Handle Cost
+        if (choice.cost > 0) this.data.budget -= choice.cost;
+
+        // B. Handle New Effects Object
+        if (choice.effects) {
+            if (choice.effects.budget) this.data.budget += choice.effects.budget;
+            if (choice.effects.prestige) this.data.prestige += choice.effects.prestige;
+            if (choice.effects.morale) this.modifyMorale(choice.effects.morale);
+        }
+
+        // C. Legacy Effects
         if(choice.effect === 'morale_hit') this.modifyMorale(-5);
         if(choice.effect === 'morale_boost') this.modifyMorale(5);
         if(choice.effect === 'donation_small') { this.data.budget += 10000; this.addEmail("Dean's Office", "Donation Received", "The alumni event was a success. +$10,000."); }
         if(choice.effect === 'visit_weekend') this.hostVisitWeekend();
+
+        // D. Clear Event & Update Email to look like a Reply
         this.data.pendingEvent = null;
-        const email = this.data.emails[0]; 
-        if(email && email.body.includes('onclick="Game.resolveEvent')) {
-             email.body = `<div style="background:#ecf0f1; border:1px solid #bdc3c7; padding:15px;"><strong>${event.title} Resolved</strong><p>${event.desc}</p><div style="margin-top:10px; padding:10px; background:#fff; border:1px solid #ccc;">Selected: <strong>${choice.text}</strong><br><span style="font-size:0.8rem; color:#666;">${choice.flavor}</span></div></div>`;
+        const email = this.data.emails.find(e => e.body.includes('onclick="Game.resolveEvent')); 
+        
+        if(email) {
+             let summary = "";
+             if(choice.effects) {
+                 if(choice.effects.budget !== 0) summary += `Budget: ${choice.effects.budget > 0 ? '+' : ''}$${choice.effects.budget} `;
+                 if(choice.effects.morale !== 0) summary += `Morale: ${choice.effects.morale > 0 ? '+' : ''}${choice.effects.morale} `;
+                 if(choice.effects.prestige !== 0) summary += `Prestige: ${choice.effects.prestige > 0 ? '+' : ''}${choice.effects.prestige} `;
+             }
+
+             // Try to find the faculty sender to generate a signature
+             const senderName = email.sender;
+             const senderFac = this.data.faculty.find(f => f.name === senderName);
+             let signature = "";
+             
+             if(senderFac) {
+                 signature = this.getProfSignature(senderFac);
+             } else {
+                 // Fallback for non-faculty senders (Facilities, Dean, etc.)
+                 signature = `<div style="margin-top:20px; padding-top:10px; border-top:1px solid #ccc; color:#555; font-family:'Georgia', serif; font-size:0.9rem;"><strong>${senderName}</strong></div>`;
+             }
+
+             const playerName = this.data.playerName || "Chair";
+
+             // Update the email body to look like a threaded reply/confirmation
+             email.body = `
+                <div style="background:#f9f9f9; padding:15px; border-bottom:1px solid #eee; color:#666; font-style:italic;">
+                    <strong>Original Issue:</strong> ${event.title}<br>
+                    ${event.desc}
+                </div>
+                <div style="padding:20px; background:#fff;">
+                    Dear Dr. ${playerName},<br><br>
+                    ${choice.flavor}<br><br>
+                    <strong>Action Taken:</strong> ${choice.text}<br>
+                    <span style="font-size:0.8rem; color:#999;">${summary}</span>
+                    <br><br>
+                    Best,<br>
+                    ${signature}
+                </div>`;
+             
+             // Mark as read/notification so it doesn't pause game again
+             email.category = 'notification';
+             
              if(typeof UI !== 'undefined') UI.openEmail(email.id);
         }
     },
@@ -397,21 +525,21 @@ const State = {
     /* js/state.js */
 
     triggerDiscovery: function(prof) {
-        // 1. Generate Title
+        // 1. Generate Title & Context
         const adj = RESEARCH_DB.ADJECTIVES[Math.floor(Math.random() * RESEARCH_DB.ADJECTIVES.length)];
         const method = RESEARCH_DB.METHODS[Math.floor(Math.random() * RESEARCH_DB.METHODS.length)];
         const target = RESEARCH_DB.TARGETS[Math.floor(Math.random() * RESEARCH_DB.TARGETS.length)];
         const app = RESEARCH_DB.APPLICATIONS[Math.floor(Math.random() * RESEARCH_DB.APPLICATIONS.length)];
         const title = `A ${adj} ${method} of ${target} for ${app}`;
         
-        // 2. Journal Selection & Dynamic Impact Factor
+        // 2. Journal Selection
         const journals = [
-            { name: "Nature", base: 9.5, variance: 0.5 },
-            { name: "Science", base: 9.2, variance: 0.6 },
-            { name: "JACS", base: 6.2, variance: 0.8 },
-            { name: "Angewandte", base: 5.8, variance: 0.8 },
-            { name: "Chem. Sci.", base: 3.2, variance: 1.5 },
-            { name: "Tetrahedron", base: 1.0, variance: 1.2 }
+            { name: "Nature", base: 9.5, variance: 0.5, type: "high" },
+            { name: "Science", base: 9.2, variance: 0.6, type: "high" },
+            { name: "JACS", base: 6.2, variance: 0.8, type: "med" },
+            { name: "Angewandte", base: 5.8, variance: 0.8, type: "med" },
+            { name: "Chem. Sci.", base: 3.2, variance: 1.5, type: "low" },
+            { name: "Tetrahedron", base: 1.0, variance: 1.2, type: "low" }
         ];
         
         const roll = (prof.hIndex / 3) + (Math.random() * 20); 
@@ -424,109 +552,100 @@ const State = {
 
         const realImpact = jObj.base + (Math.random() * jObj.variance);
         
-        // 3. Realistic Author List Generation
+        // 3. Authors
         const myStudents = this.data.students.filter(s => s.advisorId === prof.id);
         let authorString = `${prof.name}*`; 
+        let firstAuthorName = "my postdoc"; 
         
         if (myStudents.length > 0) {
-            // A. First Author: Student with best 'Hands'
             const sortedStudents = [...myStudents].sort((a,b) => b.stats.hands - a.stats.hands);
             const firstAuthor = sortedStudents[0];
-            
-            // Helper to format name: "J. Smith (G3)"
+            firstAuthorName = firstAuthor.name.split(' ')[0]; 
+
             const fmt = (s) => {
                 const parts = s.name.split(' ');
-                // If name already has (G#), use it, otherwise add it
                 if(s.name.includes('(G')) return `${parts[0].charAt(0)}. ${parts.slice(1).join(' ')}`;
                 return `${parts[0].charAt(0)}. ${parts[1]} (G${s.year})`;
             };
 
             firstAuthor.pubs = (firstAuthor.pubs || 0) + 1;
-
-            // B. Middle Authors: 2 to 5 random others
             const potentialMiddle = myStudents.filter(s => s.id !== firstAuthor.id);
-            
-            // Randomly pick between 2 and 5, capped by how many students actually exist
-            let targetCount = Math.floor(Math.random() * 4) + 2; // 2, 3, 4, or 5
+            let targetCount = Math.floor(Math.random() * 4) + 2; 
             targetCount = Math.min(targetCount, potentialMiddle.length);
-            
-            const middleAuthors = potentialMiddle
-                .sort(() => 0.5 - Math.random()) // Shuffle
-                .slice(0, targetCount)
-                .map(s => fmt(s));
-
-            // C. Construct String
+            const middleAuthors = potentialMiddle.sort(() => 0.5 - Math.random()).slice(0, targetCount).map(s => fmt(s));
             let midStr = "";
             if (middleAuthors.length > 0) midStr = ", " + middleAuthors.join(", ");
-            
             authorString = `${fmt(firstAuthor)}${midStr}, ${prof.name}*`;
         }
 
-        // 4. Apply Rewards
+        // 4. Rewards
         prof.hIndex += Math.ceil(realImpact); 
         this.data.prestige += Math.ceil(realImpact / 2);
+        if(prof.tenureTrack && prof.tenureTrack.active) prof.tenureTrack.stats.totalPubs++;
+
+        // 5. Grant Supplement
+        const supplementChance = Math.max(0.02, Math.min(0.40, realImpact * 0.04));
+        let bonusHtml = "";
         
-        if(prof.tenureTrack && prof.tenureTrack.active) {
-            prof.tenureTrack.stats.totalPubs++;
+        if (Math.random() < supplementChance) {
+            const variableCap = 80000 * (realImpact / 10);
+            const bonusAmount = 20000 + Math.floor(Math.random() * variableCap);
+            prof.funds += bonusAmount; 
+            
+            bonusHtml = `
+            <div style="margin-top:15px; background:#e8f8f5; border:1px solid #2ecc71; padding:10px; color:#219150; font-size:0.9rem;">
+                <strong>💰 Grant Extension Approved</strong><br>
+                Citing the high impact of this work, the program officer has authorized a <strong>$${bonusAmount.toLocaleString()}</strong> supplement.
+                <div style="font-size:0.75rem; margin-top:5px; color:#27ae60;">(<strong>Tax-Free:</strong> 100% deposited to Lab Reserves.)</div>
+            </div>`;
         }
 
         // Save Record
         if(!this.data.publications) this.data.publications = [];
-        this.data.publications.push({
-            title: title,
-            journal: jObj.name,
-            impact: realImpact, 
-            citations: 0,
-            age: 0,
-            author: prof.name,
-            authorHIndex: prof.hIndex,
-            year: this.data.year
-        });
+        this.data.publications.push({ title: title, journal: jObj.name, impact: realImpact, citations: 0, age: 0, author: prof.name, authorHIndex: prof.hIndex, year: this.data.year });
 
-        // 5. Dynamic Email Flavor Text
-        const FLAVOR = {
-            HIGH: [
-                "This is career-defining work. The press office needs to run a story on this.",
-                "We finally beat the reviewers. This is going to be a classic.",
-                "The editors highlighted this as a 'Hot Paper'. Very proud of the team.",
-                "It took 3 years and 4 revisions, but we finally landed the big one."
+        // 6. Email Generation
+        const chairName = this.data.playerName || "Chair";
+        const TEMPLATES = {
+            high: [
+                `Dear Dr. ${chairName},<br><br>I am thrilled to share that <strong>${jObj.name}</strong> has accepted our latest manuscript without further revision. This is a career-defining moment for ${firstAuthorName}.`,
+                `Dear Dr. ${chairName},<br><br>Big news. The editors at <strong>${jObj.name}</strong> just gave us the green light. We beat the scoop from the competing group at Caltech.`,
+                `Dr. ${chairName},<br><br>I wanted you to be the first to know: <strong>${jObj.name}</strong> is publishing our work. This validates the risky direction we took two years ago.`
             ],
-            MED: [
-                "Solid work. The students really ground this one out over the holidays.",
-                "A good consistent addition to our funding portfolio.",
-                "Reviewer #3 was a nightmare, but we got it through.",
-                "Nice validation of our hypothesis. Good for the grad students' CVs."
+            med: [
+                `Dear Dr. ${chairName},<br><br>Just forwarding the acceptance letter from <strong>${jObj.name}</strong>. It was a long review process, but we answered all queries.`,
+                `Hi Dr. ${chairName},<br><br>Good news—our paper on ${method} was accepted in <strong>${jObj.name}</strong>. It's a consistent, high-quality output.`,
+                `Dr. ${chairName},<br><br>We have another one in the bag. <strong>${jObj.name}</strong> accepted the manuscript on ${target}. It keeps the funding agencies happy.`
             ],
-            LOW: [
-                "It's a small contribution, but good for the first-year students to get their names on a paper.",
-                "Salvaged some negative data into a decent technical note.",
-                "Just keeping the publication count moving while we work on the big project.",
-                "Invited submission to a special issue. Low impact, but easy acceptance."
+            low: [
+                `Dear Dr. ${chairName},<br><br>We managed to find a home for the ${target} project in <strong>${jObj.name}</strong>. Better published than in a drawer.`,
+                `Dr. ${chairName},<br><br>Just a heads up that the technical note on ${method} was accepted by <strong>${jObj.name}</strong>. We keep the momentum moving.`,
+                `Hi Dr. ${chairName},<br><br>Accepted in <strong>${jObj.name}</strong>. It was an invited submission for a special issue. Low-hanging fruit, but good for the report.`
             ]
         };
 
-        let commentList = FLAVOR.LOW;
-        let color = "#7f8c8d";
-        if (realImpact > 9) { commentList = FLAVOR.HIGH; color = "#8e44ad"; }
-        else if (realImpact > 6) { commentList = FLAVOR.MED; color = "#2980b9"; }
-        
-        const randomComment = commentList[Math.floor(Math.random() * commentList.length)];
+        let type = realImpact > 9 ? "high" : (realImpact > 6 ? "med" : "low");
+        let color = realImpact > 9 ? "#8e44ad" : (realImpact > 6 ? "#2980b9" : "#7f8c8d");
+        const bodyContent = TEMPLATES[type][Math.floor(Math.random() * TEMPLATES[type].length)];
 
-        // 6. Send Email
-        const body = `
-            <div style="border-left: 4px solid ${color}; padding-left: 10px; margin-bottom: 15px;">
+        // --- USE NEW SIGNATURE HELPER ---
+        const signature = this.getProfSignature(prof);
+
+        const fullBody = `
+            <div style="border-left: 4px solid ${color}; padding-left: 10px; margin-bottom: 15px; background:#f9f9f9; padding:10px;">
                 <div style="font-size:1.1rem; font-weight:bold; color:${color};">${jObj.name} Accepted</div>
                 <div style="font-style:italic; margin-bottom:5px;">"${title}"</div>
-                <div style="font-size:0.9rem;">
+                <div style="font-size:0.85rem; color:#666;">
                     <strong>Authors:</strong> ${authorString}<br>
                     <strong>Impact Factor:</strong> ${realImpact.toFixed(2)} / 10
                 </div>
             </div>
-            <p>"${randomComment}"</p>
-            <p>Best,<br>${prof.name.split(' ').slice(-1)[0]}</p>
+            ${bodyContent}
+            ${bonusHtml}
+            ${signature}
         `;
 
-        this.addEmail(prof.name, `Pub Accepted: ${jObj.name}`, body, 'paper');
+        this.addEmail(prof.name, `Pub Accepted: ${jObj.name}`, fullBody, 'paper');
     },
     /* Paste this AFTER triggerDiscovery, inside the State object */
 
@@ -786,8 +905,38 @@ processGrantCycle: function() {
     });
 },
 
-    setRecruitmentStrategy: function(target, strategyKey) { const cost = (strategyKey === 'aggressive') ? 7500 : (strategyKey === 'standard' ? 2000 : 0); this.data.budget -= cost; this.data.admissions.targetSize = parseInt(target); this.data.admissions.strategy = strategyKey; this.data.admissions.setupComplete = true; },
-    
+    setRecruitmentStrategy: function(target, strategyKey) { 
+        // 1. Deduct Cost
+        const cost = (strategyKey === 'aggressive') ? 7500 : (strategyKey === 'standard' ? 2000 : 0); 
+        this.data.budget -= cost; 
+        
+        // 2. Set State
+        this.data.admissions.targetSize = parseInt(target); 
+        this.data.admissions.strategy = strategyKey; 
+        this.data.admissions.setupComplete = true; 
+
+        // 3. Identify Sender (Admissions Chair)
+        const admChair = this.getCommitteeChair('admissions');
+        const playerName = this.data.playerName || "Chair";
+        const signature = this.getProfSignature(admChair);
+
+        // 4. Draft Personalized Reply
+        let confirmText = "";
+        let subjectLine = "Recruitment Strategy Confirmed";
+
+        if(strategyKey === 'aggressive') {
+            confirmText = "I have instructed the committee to book travel for the major conferences and purchase premium ad space in C&E News. We are casting a wide net.";
+        } else if(strategyKey === 'standard') {
+            confirmText = "We will post to the standard job boards (Science/Nature Careers) and reach out to our colleague networks. This should give us a healthy applicant pool.";
+        } else {
+            confirmText = "We will proceed with a passive strategy, relying on our website and word-of-mouth. It saves money, though we may see fewer applicants.";
+        }
+
+        const body = `Dear Dr. ${playerName},<br><br>Understood. We have locked in a cohort target of <strong>${target} students</strong>.<br><br>${confirmText}<br><br>We will begin reviewing applications in December.<br><br>Best,<br>${signature}`;
+
+        // 5. Send Email
+        this.addEmail(admChair.name, `Re: ${subjectLine}`, body, "notification");
+    },
     startAdmissionsSeason: function() { 
         this.data.admissions.active = true; 
         const stratKey = this.data.admissions.strategy || "standard"; 
@@ -802,8 +951,17 @@ processGrantCycle: function() {
     
     processGradualDecisions: function() { let chance = 0.05; if(this.data.month === 3) chance = 0.25; if(this.data.month === 3 && this.data.day > 10) chance = 0.60; this.data.admissions.pool.forEach(app => { if(app.status === 'Offer Extended' && Math.random() < chance) this.resolveApplication(app, "Early Decision"); }); },
     
-    processDecisionDay: function() { let count = 0; this.data.admissions.pool.forEach(app => { if(app.status === 'Offer Extended') { this.resolveApplication(app, "Deadline Decision"); if(app.status === "Accepted") count++; } }); this.data.pendingEvent = { title: "Decision Day Results", desc: `${count} candidates accepted offers.`, choices: [{ text: "View Roster", cost: 0, flavor: "Done.", effect: "none" }] }; UI.renderAdmissions(this.data); },
-    
+    processDecisionDay: function() { 
+        let count = 0; 
+        this.data.admissions.pool.forEach(app => { 
+            if(app.status === 'Offer Extended') { 
+                this.resolveApplication(app, "Deadline Decision"); 
+                if(app.status === "Accepted") count++; 
+            } 
+        }); 
+        // Line deleted here.
+        UI.renderAdmissions(this.data); 
+    },
     /* js/state.js */
 
     // NEW: Centralized Math for Acceptance Probability
@@ -993,8 +1151,15 @@ processGrantCycle: function() {
     rejectCandidate: function(appId) { const app = this.data.admissions.pool.find(a => a.id === appId); if(app) app.status = "Rejected"; },
     
     addEmail: function(sender, subject, body, category='normal') { 
-        this.data.emails.unshift({ id: Date.now() + Math.random(), date: `${this.data.month+1}/${this.data.day}`, sender: sender, subject: subject, body: body, read: false }); 
-        
+        this.data.emails.unshift({ 
+            id: Date.now() + Math.random(), 
+            date: `${this.data.month+1}/${this.data.day}`, 
+            sender: sender, 
+            subject: subject, 
+            body: body, 
+            read: false,
+            category: category // <--- THE CRITICAL MISSING PIECE
+        });
         let shouldPause = false;
         const s = this.data.settings || { pauseOnEmail: true, pauseOnPaper: false };
 
@@ -1019,14 +1184,21 @@ processGrantCycle: function() {
         this.data.facultySearch.phase = "ads";
         this.data.budget -= 5000;
         
-        // --- THE FIX: CLEAR THE LIST ---
         this.data.facultySearch.shortlist = []; 
-        this.data.facultySearch.pool = []; // Good practice to clear this too
-        // -------------------------------
+        this.data.facultySearch.pool = []; 
 
-        this.addEmail("Search Cmte", "Job Ad Posted", "We have posted the ad in Science and Nature Jobs. Applications will arrive in October. (-$5,000)");
-        
-        this.data.pendingEvent = { title: "Search Active", desc: "Ads are running.", choices: [{text:"OK", cost:0, flavor:"Good", effect:"none"}]};
+        // 1. Get Chair & Signature
+        const searchChair = this.getCommitteeChair('search');
+        const playerName = this.data.playerName || "Chair";
+        const signature = this.getProfSignature(searchChair);
+
+        // 2. Draft Email
+        const body = `Dear Dr. ${playerName},<br><br>
+        Per your authorization, I have officially posted the Tenure-Track ad in <em>Science Careers</em> and <em>Nature Jobs</em>.<br><br>
+        We expect the first batch of CVs to arrive in October. I will filter them for the "Longlist" and present them to you then.<br><br>
+        Best,<br>${signature}`;
+
+        this.addEmail(searchChair.name, "Job Ad Posted", body, "notification");
     },
     
     skipFacultySearch: function() {
@@ -1047,7 +1219,6 @@ processGrantCycle: function() {
             const postdocLab = FACULTY_SEARCH.LABS[Math.floor(Math.random() * FACULTY_SEARCH.LABS.length)];
             const baseStartup = 400000 + ((5-tier) * 100000) + (Math.random() * 200000);
             
-            // NEW: Random Field & Lab Size
             const fieldObj = FAC_DATA.fields[Math.floor(Math.random() * FAC_DATA.fields.length)];
             
             pool.push({
@@ -1057,25 +1228,34 @@ processGrantCycle: function() {
                 stats: { research: Math.random()*100, teaching: Math.random()*100 },
                 hIndex: Math.floor((5 - tier) * 3 + (Math.random() * 5)),
                 startupAsk: Math.floor(baseStartup),
-                
-                // DATA FOR INTERVIEWS
                 field: fieldObj.name,
                 labSize: sizes[Math.floor(Math.random() * sizes.length)],
                 interviewLog: [], 
-                
                 status: "Applied"
             });
         }
         this.data.facultySearch.pool = pool;
         this.data.facultySearch.phase = "longlist";
         
-        // UPDATED EMAIL WITH DEADLINE
-        this.addEmail("Search Chair", "Applications Received", 
-            `We have received ${count} applications.<br><br>
-            <strong>Task:</strong> Shortlist 3-5 candidates.<br>
-            <strong>Deadline:</strong> November 1st.<br><br>
-            <span style="color:#c0392b">Warning: Any candidate not shortlisted by Nov 1 will be automatically rejected.</span>`, "search");
+        // 1. Get Chair & Signature
+        const searchChair = this.getCommitteeChair('search');
+        const playerName = this.data.playerName || "Chair";
+        const signature = this.getProfSignature(searchChair);
+
+        // 2. Draft Email
+        const body = `Dear Dr. ${playerName},<br><br>
+        The portal has closed. We have received <strong>${count} applications</strong> for the open position.<br><br>
+        <strong>Task:</strong> Please review the pool and Shortlist 3-5 candidates for flyouts.<br>
+        <strong>Deadline:</strong> November 1st.<br><br>
+        <div style="background:#fff5f5; border:1px solid #feb2b2; padding:10px; font-size:0.85rem; color:#c0392b;">
+            <strong>Warning:</strong> Any candidate not shortlisted by Nov 1 will be automatically rejected.
+        </div>
+        <br>Best,<br>${signature}`;
+
+        this.addEmail(searchChair.name, "Applications Received", body, "search");
     },
+
+    /* js/state.js */
 
     shortlistCandidate: function(id) {
         const c = this.data.facultySearch.pool.find(x => x.id === id);
@@ -1085,7 +1265,20 @@ processGrantCycle: function() {
         c.status = "Shortlist";
         this.data.facultySearch.shortlist.push(c);
         this.data.budget -= 1500;
-        this.addEmail("Travel", "Flyout Booked", `Flight booked for ${c.name}. They will arrive in early November to do an interview and negotiate if you desire. (-$1,500)`);
+
+        // 1. Get Chair & Signature
+        const searchChair = this.getCommitteeChair('search');
+        const playerName = this.data.playerName || "Chair";
+        const signature = this.getProfSignature(searchChair);
+
+        // 2. Draft Email
+        const body = `Dear Dr. ${playerName},<br><br>
+        Excellent choice. Dr. ${c.name} has a strong pedigree.<br><br>
+        I have instructed the admin team to book their flights and hotel for a weekend visit. We will schedule their job talk for Friday afternoon.<br><br>
+        Best,<br>${signature}`;
+        
+        this.addEmail(searchChair.name, `Flyout Booked: ${c.name}`, body, 'notification');
+        
         if(typeof UI !== 'undefined') UI.renderFacultySearch(this.data);
     },
     interviewFaculty: function(cId, qId) {

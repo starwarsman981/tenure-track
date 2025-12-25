@@ -1,17 +1,34 @@
 ﻿/* js/main.js */
+/* js/main.js */
 const Game = {
     timer: null,
     currentSpeed: 0, 
     SPEEDS: { 0: null, 1: 2000, 2: 1000, 3: 250 },
     viewState: { mode: 'month', year: 2025, month: 7, day: 1 },
     rosterFilters: { rank: 'all', field: 'all', tenure: 'all', sort: 'name' },
-    // Add these two lines to the Game object:
-    emailFilter: 'all',
-    emailSearchQuery: '', // <--- NEW STATE
-    setEmailFilter: function(val) { this.emailFilter = val; UI.renderInbox(State.data.emails); },
-    setEmailSearch: function(val) { this.emailSearchQuery = val.toLowerCase(); UI.renderInbox(State.data.emails); }, // <--- NEW FUNCTION
     
-    // --- UPDATED: ADMISSIONS FILTERS ---
+    // --- MISSING PART 1: The Filter System ---
+    emailFilters: { 
+        urgent: true, 
+        paper: true, 
+        search: true, 
+        admissions: true, 
+        finance: true, 
+        notification: true 
+    },
+    emailSearchQuery: '',
+    
+    toggleEmailFilter: function(key) {
+        this.emailFilters[key] = !this.emailFilters[key];
+        UI.renderInbox(State.data.emails);
+    },
+    
+    setEmailSearch: function(val) { 
+        this.emailSearchQuery = val.toLowerCase(); 
+        UI.renderInbox(State.data.emails); 
+    },
+    // -----------------------------------------
+
     admissionsFilters: { field: 'all', gpa: 'all', rec: 'all' }, 
     financeTab: 'overview',
 
@@ -21,23 +38,24 @@ const Game = {
         this.updateSetupFlavor();
     },
 
-    updateSetupFlavor: function() {
-        const type = document.getElementById('setup-type').value;
-        const descDiv = document.getElementById('setup-desc');
-        let text = "";
-        if(type === 'state') text = "High teaching load, moderate funding, lots of bureaucracy.";
-        else if(type === 'ivy') text = "Massive endowment, high research expectations, cutthroat politics.";
-        else if(type === 'community') text = "Focus on education, low research budget, heavy course load.";
-        descDiv.innerText = text;
-    },
+    // ... (Keep updateSetupFlavor) ...
 
+    // --- MISSING PART 2: The Player Name Logic ---
     initGameFromSetup: function() {
         try {
             const name = document.getElementById('setup-name').value;
             const typeKey = document.getElementById('setup-type').value;
             const discKey = document.getElementById('setup-discipline').value;
+            
+            // FIX: Grab the player name from the input you added to index.html
+            const playerInput = document.getElementById('setup-player-name');
+            const playerName = playerInput ? playerInput.value : "Smith";
+
             if(!name || name.trim() === "") { alert("Please name your department."); return; }
-            State.initNewGame(name, typeKey, discKey);
+            
+            // FIX: Pass the name to the state
+            State.initNewGame(name, typeKey, discKey, playerName);
+            
             this.viewState.year = State.data.year;
             this.viewState.month = State.data.month;
             this.viewState.day = State.data.day;
@@ -48,6 +66,8 @@ const Game = {
             alert("Error starting game: " + error.message);
         }
     },
+
+    // ... (Rest of file is fine)
 
     enterGameInterface: function() {
         UI.toggleGameView(true);
@@ -94,8 +114,11 @@ const Game = {
         if (!State.data.pendingEvent) return;
         const choice = State.data.pendingEvent.choices[choiceIdx];
         if (State.data.budget < choice.cost) { alert("Insufficient funds."); return; }
+        
         State.resolveEventChoice(State.data.pendingEvent, choice);
+        
         UI.updateTopBar(State.data); 
+        UI.renderInbox(State.data.emails); // NEW: Refresh inbox to show "Resolved" status immediately
     },
 
     runInterview: function(appId, qId) {
