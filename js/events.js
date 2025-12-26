@@ -91,5 +91,84 @@ const RANDOM_EVENTS = [
             { text: "Take the money", cost: 0, flavor: "We'll call it 'Transmutation Physics'.", effects: { morale: -5, prestige: -15, budget: 50000 } },
             { text: "Decline", cost: 0, flavor: "We have standards.", effects: { morale: 5, prestige: 5, budget: 0 } }
         ]
-    }
+    },
+    {
+        id: "ehs_audit",
+        title: "Surprise Safety Inspection",
+        sender: "EHS Officer",
+        desc: "Environmental Health & Safety found coffee cups in the synthesis lab and a cylinder of H2 gas unchained. They are threatening to shut us down.",
+        choices: [
+            { text: "Pay the Fine", cost: 2500, flavor: "You write a check to make the problem go away.", effects: { budget: -2500, morale: 0, prestige: 0 } },
+            { text: "Blame the Grad Students", cost: 0, flavor: "You force them to attend a 6-hour safety seminar on Saturday.", effects: { budget: 0, morale: -15, prestige: 0 } },
+            { text: "Bribe the Inspector", cost: 0, flavor: "You take them to a steak dinner. Risky, but it worked.", effects: { budget: -200, morale: 5, prestige: 0 } }
+        ]
+    },
+    {
+        id: "helium_crisis",
+        title: "Global Helium Shortage",
+        sender: "NMR Facility Manager",
+        desc: "The price of liquid helium has quadrupled overnight. If we don't refill the magnets, they will quench (break permanently).",
+        choices: [
+            { text: "Pay Market Rate", cost: 12000, flavor: "It bleeds the budget, but the instruments stay running.", effects: { budget: -12000, morale: 0, prestige: 0 } },
+            { text: "Decommission the Old Magnet", cost: 2000, flavor: "We sacrifice the 300 MHz machine to save the others.", effects: { budget: -2000, morale: -10, prestige: -2 } },
+            { text: "Vent the System", cost: 0, flavor: "Total shutdown. Research halts for weeks.", effects: { budget: 0, morale: -20, prestige: -10 } }
+        ]
+    },
+    {
+        id: "twitter_rant",
+        title: "The Twitter Scandal",
+        sender: "Public Relations",
+        desc: "One of the faculty members tweeted something very rude about the National Science Foundation. It's trending.",
+        choices: [
+            { text: "Hire PR Crisis Team", cost: 5000, flavor: "They bury the story with SEO magic.", effects: { budget: -5000, morale: 0, prestige: 0 } },
+            { text: "Public Apology", cost: 0, flavor: "Humiliating, but free.", effects: { budget: 0, morale: -10, prestige: -5 } },
+            { text: "Defend 'Academic Freedom'", cost: 0, flavor: "The faculty love you; the funding agencies hate you.", effects: { budget: 0, morale: 15, prestige: -10 } }
+        ]
+    },
+    {
+        id: "mold_bloom",
+        title: "Black Mold",
+        sender: "Building Manager",
+        desc: "It's growing in the ceiling tiles of the interaction lounge. Students are complaining of 'brain fog'.",
+        choices: [
+            { text: "Professional Remediation", cost: 6000, flavor: "Men in hazmat suits arrive. Problem solved.", effects: { budget: -6000, morale: 5, prestige: 0 } },
+            { text: "Paint Over It", cost: 500, flavor: "The 'Landlord Special'. It looks clean, for now.", effects: { budget: -500, morale: 0, prestige: 0 } }, // Hidden risk?
+            { text: "Ignore It", cost: 0, flavor: "Tell them it's just 'character'.", effects: { budget: 0, morale: -10, prestige: 0 } }
+        ]
+    },
+    {
+        id: "journal_cover",
+        title: "Pay for Play",
+        sender: "Nature Chemistry",
+        desc: "The editors loved our latest paper. They are offering us the Cover Art spot... for a 'small' fee.",
+        choices: [
+            { text: "Pay the Fee", cost: 4500, flavor: "It costs as much as a used car, but the prestige is real.", effects: { budget: -4500, morale: 5, prestige: 15 } },
+            { text: "Polite Refusal", cost: 0, flavor: "We take the publication, but lose the spotlight.", effects: { budget: 0, morale: 0, prestige: 5 } },
+            { text: "Ask Undergrad to Draw It", cost: 0, flavor: "It looks terrible. They reject it. Embarrassing.", effects: { budget: 0, morale: -5, prestige: 0 } }
+        ]
+    },
+    {
+        id: "visiting_nobel",
+        title: "The VIP Visit",
+        sender: "Dean's Office",
+        desc: "A Nobel Laureate is touring the campus today. They want to see our department.",
+        choices: [
+            { text: "Catered Lunch & Wine", cost: 1500, flavor: "We impress them with our hospitality.", effects: { budget: -1500, morale: 5, prestige: 5 } },
+            { text: "Potluck", cost: 0, flavor: "Prof. Smith brought his famous 'mystery casserole'. The Laureate is unimpressed.", effects: { budget: -100, morale: -5, prestige: -2 } },
+            { text: "Hide Everyone", cost: 0, flavor: "We pretend we are busy doing 'very important science'.", effects: { budget: 0, morale: -5, prestige: 0 } }
+        ]
+    },
+    {
+        id: "ta_strike",
+        title: "Grad Student Strike",
+        sender: "Grad Union Rep",
+        desc: "The TAs are refusing to grade exams until the coffee machine is fixed and stipends are adjusted for inflation.",
+        choices: [
+            { text: "Cave to Demands", cost: 0, flavor: "You buy a fancy espresso machine. Morale skyrockets.", effects: { budget: -3000, morale: 20, prestige: 0 } },
+            { text: "Hard Line", cost: 0, flavor: "You threaten to revoke funding. The grading gets done, but the resentment is palpable.", effects: { budget: 0, morale: -20, prestige: 0 } },
+            { text: "Professors Grade Exams", cost: 0, flavor: "The faculty are furious at doing menial labor.", effects: { budget: 0, morale: -15, prestige: 0 } } // Faculty morale hit
+        ]
+    },
+
+    
 ];

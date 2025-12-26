@@ -431,49 +431,73 @@ const State = {
     },
 
     resolveEventChoice: function(event, choice) {
-        // A. Handle Cost
-        if (choice.cost > 0) this.data.budget -= choice.cost;
+        // --- 1. CALCULATE FINANCIAL IMPACT (Calculate Once) ---
+        let budgetChange = 0;
 
-        // B. Handle New Effects Object
+        // Priority A: Does the event have a specific budget outcome? (e.g., -15000)
+        // We check !== undefined because the effect might be 0.
+        if (choice.effects && typeof choice.effects.budget !== 'undefined') {
+            budgetChange = choice.effects.budget;
+        } 
+        // Priority B: If not, does it have a cost? (Legacy fallback)
+        else if (choice.cost > 0) {
+            budgetChange = -choice.cost;
+        }
+
+        // --- 2. APPLY CHANGES ---
+        this.data.budget += budgetChange;
+
+        // Apply Other Effects
         if (choice.effects) {
-            if (choice.effects.budget) this.data.budget += choice.effects.budget;
             if (choice.effects.prestige) this.data.prestige += choice.effects.prestige;
             if (choice.effects.morale) this.modifyMorale(choice.effects.morale);
         }
 
-        // C. Legacy Effects
+        // Legacy Effects (Backward Compatibility)
         if(choice.effect === 'morale_hit') this.modifyMorale(-5);
         if(choice.effect === 'morale_boost') this.modifyMorale(5);
-        if(choice.effect === 'donation_small') { this.data.budget += 10000; this.addEmail("Dean's Office", "Donation Received", "The alumni event was a success. +$10,000."); }
+        if(choice.effect === 'donation_small') { 
+            this.data.budget += 10000; 
+            // Note: donation_small adds 10k on top of any budgetChange calculated above
+            this.addEmail("Dean's Office", "Donation Received", "The alumni event was a success. +$10,000."); 
+        }
         if(choice.effect === 'visit_weekend') this.hostVisitWeekend();
 
-        // D. Clear Event & Update Email to look like a Reply
+        // --- 3. CLEANUP & EMAIL UPDATE ---
         this.data.pendingEvent = null;
+        
+        // Find the original email to update it to "Resolved"
         const email = this.data.emails.find(e => e.body.includes('onclick="Game.resolveEvent')); 
         
         if(email) {
+             // Generate Summary String based on what we ACTUALLY applied
              let summary = "";
+             
+             if(budgetChange !== 0) summary += `Budget: ${budgetChange > 0 ? '+' : ''}$${budgetChange.toLocaleString()} `;
+             
              if(choice.effects) {
-                 if(choice.effects.budget !== 0) summary += `Budget: ${choice.effects.budget > 0 ? '+' : ''}$${choice.effects.budget} `;
-                 if(choice.effects.morale !== 0) summary += `Morale: ${choice.effects.morale > 0 ? '+' : ''}${choice.effects.morale} `;
-                 if(choice.effects.prestige !== 0) summary += `Prestige: ${choice.effects.prestige > 0 ? '+' : ''}${choice.effects.prestige} `;
+                 if(choice.effects.morale) summary += `Morale: ${choice.effects.morale > 0 ? '+' : ''}${choice.effects.morale} `;
+                 if(choice.effects.prestige) summary += `Prestige: ${choice.effects.prestige > 0 ? '+' : ''}${choice.effects.prestige} `;
              }
 
-             // Try to find the faculty sender to generate a signature
+             // Handle Legacy Summaries
+             if(choice.effect === 'morale_hit') summary += "Morale: -5 ";
+             if(choice.effect === 'morale_boost') summary += "Morale: +5 ";
+
+             // Signature Generation
              const senderName = email.sender;
              const senderFac = this.data.faculty.find(f => f.name === senderName);
              let signature = "";
              
-             if(senderFac) {
+             if(this.getProfSignature && senderFac) {
                  signature = this.getProfSignature(senderFac);
              } else {
-                 // Fallback for non-faculty senders (Facilities, Dean, etc.)
                  signature = `<div style="margin-top:20px; padding-top:10px; border-top:1px solid #ccc; color:#555; font-family:'Georgia', serif; font-size:0.9rem;"><strong>${senderName}</strong></div>`;
              }
 
              const playerName = this.data.playerName || "Chair";
 
-             // Update the email body to look like a threaded reply/confirmation
+             // Update Email Body
              email.body = `
                 <div style="background:#f9f9f9; padding:15px; border-bottom:1px solid #eee; color:#666; font-style:italic;">
                     <strong>Original Issue:</strong> ${event.title}<br>
@@ -483,15 +507,13 @@ const State = {
                     Dear Dr. ${playerName},<br><br>
                     ${choice.flavor}<br><br>
                     <strong>Action Taken:</strong> ${choice.text}<br>
-                    <span style="font-size:0.8rem; color:#999;">${summary}</span>
+                    <span style="font-size:0.8rem; color:#999; font-weight:bold;">${summary}</span>
                     <br><br>
                     Best,<br>
                     ${signature}
                 </div>`;
              
-             // Mark as read/notification so it doesn't pause game again
-             email.category = 'notification';
-             
+             email.category = 'notification'; 
              if(typeof UI !== 'undefined') UI.openEmail(email.id);
         }
     },
