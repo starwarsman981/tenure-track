@@ -1,0 +1,16 @@
+# Ignore Visual Studio temporary files
+.vs/
+*.user
+*.suo
+bin/
+obj/
+notes/
+# Electron packaging files
+main.js
+package.json
+package-lock.json
+node_modules/
+dist/
+
+# Electron builder cache
+.cache/
